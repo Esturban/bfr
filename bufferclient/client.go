@@ -220,7 +220,7 @@ type Asset struct {
 	Thumbnail string `json:"thumbnail"`
 }
 
-// PostDetail is the read shape returned by Get (buf show).
+// PostDetail is the read shape returned by Get (bfr show).
 type PostDetail struct {
 	ID      string `json:"id"`
 	Status  string `json:"status"`

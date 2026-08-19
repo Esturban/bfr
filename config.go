@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Esturban/buf/bufferclient"
+	"github.com/Esturban/bfr/bufferclient"
 )
 
-// root is the current working directory -- where a caller runs `buf` from,
+// root is the current working directory -- where a caller runs `bfr` from,
 // not where the binary happens to be installed. .env and the channel cache
 // default here, same convention `git` and most CLIs use for repo-local
-// config, and it works the same way whether buf is built to ./buf, `go
+// config, and it works the same way whether bfr is built to ./bfr, `go
 // install`ed onto $PATH, or placed anywhere else.
 func root() string {
 	if wd, err := os.Getwd(); err == nil {
@@ -75,12 +75,12 @@ func apiToken() (string, error) {
 
 // cachePath is the channel cache file location: BUFFER_CACHE_FILE overrides
 // it, otherwise it defaults next to the repo root, same file the original
-// wrote to (.buf-channels.json).
+// wrote to (.bfr-channels.json).
 func cachePath() string {
 	if p := os.Getenv("BUFFER_CACHE_FILE"); p != "" {
 		return p
 	}
-	return filepath.Join(root(), ".buf-channels.json")
+	return filepath.Join(root(), ".bfr-channels.json")
 }
 
 type cacheFile struct {
@@ -92,7 +92,7 @@ type cacheFile struct {
 func readCache() (*cacheFile, error) {
 	data, err := os.ReadFile(cachePath())
 	if err != nil {
-		return nil, fmt.Errorf("no channel cache. Run 'buf channels' first")
+		return nil, fmt.Errorf("no channel cache. Run 'bfr channels' first")
 	}
 	var c cacheFile
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -123,12 +123,12 @@ func resolveChannel(arg string) (string, error) {
 			return ch.ID, nil
 		}
 	}
-	return "", fmt.Errorf("channel '%s' not in cache. Run 'buf channels' to refresh", arg)
+	return "", fmt.Errorf("channel '%s' not in cache. Run 'bfr channels' to refresh", arg)
 }
 
 // orgID returns the cached organizationId if a cache file exists, otherwise
 // resolves it live from the API (without caching it standalone -- org is
-// only persisted as part of a full 'buf channels' write, same as bash).
+// only persisted as part of a full 'bfr channels' write, same as bash).
 func orgID(client *bufferclient.Client) (string, error) {
 	if c, err := readCache(); err == nil {
 		return c.OrganizationID, nil

@@ -1,6 +1,6 @@
-<img src="assets/logo.svg" width="48" height="48" alt="buf logo">
+<img src="assets/logo.svg" width="48" height="48" alt="bfr logo">
 
-# buf
+# bfr
 
 A Go command-line client for [Buffer](https://buffer.com)'s GraphQL API
 (`api.buffer.com`). List channels, create ideas and drafts, queue posts and
@@ -9,35 +9,25 @@ terminal. The GraphQL client lives in its own package, `bufferclient`, which
 carries no project-specific defaults, so it can be imported by other Go
 tools without pulling this CLI along.
 
-## Naming
-
-`buf` collides with [buf.build](https://buf.build)'s protobuf CLI, which
-also installs a `buf` binary and is common on developer PATHs. This repo has
-not been renamed yet -- that decision needs a matching edit to `go.mod`, the
-import in `commands.go`, and the release config (`.goreleaser.yaml`), none
-of which this pass touches. Until it is renamed: if you have buf.build's
-`buf` installed, expect a PATH collision, and disambiguate with a full path
-or a shell alias.
-
 ## Install
 
 ```sh
-git clone https://github.com/Esturban/buf.git
-cd buf
-go build -o buf .
+git clone https://github.com/Esturban/bfr.git
+cd bfr
+go build -o bfr .
 ```
 
 Or, if you already have the module available to your Go toolchain:
 
 ```sh
-go install github.com/Esturban/buf@latest
+go install github.com/Esturban/bfr@latest
 ```
 
 Requires Go 1.21+.
 
 ## Auth
 
-`buf` reads `BUFFER_API_KEY` from the environment, or from a `.env` file at
+`bfr` reads `BUFFER_API_KEY` from the environment, or from a `.env` file at
 the repo root (gitignored, never committed). Generate a token from your
 Buffer account's API access / developer app settings -- never pass it as a
 flag, it is never echoed or logged.
@@ -56,26 +46,26 @@ The image verbs (`image`, `draft-image`) additionally require:
   convert the source image to real JPEG bytes before upload).
 
 `BUFFER_CACHE_FILE` optionally overrides where the channel cache is written
-(default: `.buf-channels.json` next to the repo root).
+(default: `.bfr-channels.json` next to the repo root).
 
 ## Commands
 
 | Command | Effect |
 |---|---|
-| `buf channels` | List channel ids/names, cache to `.buf-channels.json` |
-| `buf idea <file.md>` | Post to the ideas board -- no channel attached, never posts |
-| `buf draft <channel> <file.md>` | Draft on the channel (`saveToDraft`) -- never posts |
-| `buf post <channel> <file.md>` | **Publishes live** -- queues to the channel, will post |
-| `buf thread <channel> <file.md>` | **Publishes live** -- `---`-delimited blocks become a thread |
-| `buf image <channel> <file.md> <path>` | **Publishes live** -- Drive upload, attach, queue |
-| `buf draft-image <channel> <file.md> <path>` | Draft on the channel with an image -- never posts |
-| `buf show <post-id>` | Read a post/draft back -- status, channel, text, assets |
-| `buf list [channel]` | List drafts -- id, status, channel, text, image flag (read-only) |
-| `buf delete <post-id>` | **Permanently deletes** a post/draft -- irreversible |
-| `buf version` | Print version, commit and build date |
+| `bfr channels` | List channel ids/names, cache to `.bfr-channels.json` |
+| `bfr idea <file.md>` | Post to the ideas board -- no channel attached, never posts |
+| `bfr draft <channel> <file.md>` | Draft on the channel (`saveToDraft`) -- never posts |
+| `bfr post <channel> <file.md>` | **Publishes live** -- queues to the channel, will post |
+| `bfr thread <channel> <file.md>` | **Publishes live** -- `---`-delimited blocks become a thread |
+| `bfr image <channel> <file.md> <path>` | **Publishes live** -- Drive upload, attach, queue |
+| `bfr draft-image <channel> <file.md> <path>` | Draft on the channel with an image -- never posts |
+| `bfr show <post-id>` | Read a post/draft back -- status, channel, text, assets |
+| `bfr list [channel]` | List drafts -- id, status, channel, text, image flag (read-only) |
+| `bfr delete <post-id>` | **Permanently deletes** a post/draft -- irreversible |
+| `bfr version` | Print version, commit and build date |
 
-`<channel>` is a channel id, or a channel name from `buf channels`
-(case-insensitive, resolved against the cache -- run `buf channels` first).
+`<channel>` is a channel id, or a channel name from `bfr channels`
+(case-insensitive, resolved against the cache -- run `bfr channels` first).
 
 Both connected channels have an unpaused queue, so `post`/`thread`/`image`
 publish for real; there is no "safe" queue state for them. `idea` and
@@ -84,10 +74,10 @@ publish for real; there is no "safe" queue state for them. `idea` and
 ## Example
 
 ```sh
-buf channels                          # cache channel ids/names once
-buf draft general-x ./post.md         # draft on a channel, never posts
-buf show <post-id>                    # confirm it landed as a draft
-buf list general-x                    # see all drafts on that channel
+bfr channels                          # cache channel ids/names once
+bfr draft general-x ./post.md         # draft on a channel, never posts
+bfr show <post-id>                    # confirm it landed as a draft
+bfr list general-x                    # see all drafts on that channel
 ```
 
 A thread file uses `---` on its own line to split blocks; the first
@@ -102,7 +92,7 @@ Second tweet, posted as a reply.
 ```
 
 ```sh
-buf thread general-x ./thread.md      # publishes live
+bfr thread general-x ./thread.md      # publishes live
 ```
 
 ## Library usage
@@ -111,7 +101,7 @@ buf thread general-x ./thread.md      # publishes live
 import (
     "os"
 
-    "github.com/Esturban/buf/bufferclient"
+    "github.com/Esturban/bfr/bufferclient"
 )
 
 func main() {
@@ -124,7 +114,7 @@ func main() {
 
     result, _, err := c.CreatePost(bufferclient.PostInput{
         Text:           "hello from bufferclient",
-        ChannelID:      "channel-id-from-buf-channels",
+        ChannelID:      "channel-id-from-bfr-channels",
         SchedulingType: "automatic",
         Mode:           "addToQueue",
         SaveToDraft:    true, // omit to queue for real
