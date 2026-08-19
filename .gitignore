@@ -6,3 +6,20 @@ dist/
 # buf-cli: regenerable channel cache, real ids for whichever account ran it
 .buf-channels.json
 buf
+
+# agent harness: never ships with the tool, and never ships to a public repo
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.claude/
+.wolf/
+.codegraph/
+.cursor/
+.cursorrules
+.cursorignore
+.clinerules
+.windsurfrules
+.roo*
+memory-bank/
+.github/copilot-instructions.md
+*.code-workspace
