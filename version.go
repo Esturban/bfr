@@ -14,5 +14,5 @@ var (
 )
 
 func cmdVersion() {
-	fmt.Printf("buf %s (commit %s, built %s)\n", version, commit, date)
+	fmt.Printf("bfr %s (commit %s, built %s)\n", version, commit, date)
 }

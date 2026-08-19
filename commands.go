@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Esturban/buf/bufferclient"
+	"github.com/Esturban/bfr/bufferclient"
 )
 
 // blocked prints a BLOCKED line to stderr and exits 1 -- same contract as
@@ -312,7 +312,7 @@ func toRealJPEG(src string) string {
 	if _, err := exec.LookPath("sips"); err != nil {
 		blocked("sips is required to convert to JPEG for Buffer upload")
 	}
-	out := strings.TrimSuffix(src, filepath.Ext(src)) + ".buf-upload.jpg"
+	out := strings.TrimSuffix(src, filepath.Ext(src)) + ".bfr-upload.jpg"
 	cmd := exec.Command("sips", "-s", "format", "jpeg", src, "--out", out)
 	if err := cmd.Run(); err != nil {
 		blocked("sips failed converting %s: %s", src, err)
