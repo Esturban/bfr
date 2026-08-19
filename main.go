@@ -36,6 +36,7 @@ const usageText = `Usage: buf <command> [args]
   buf show   <post-id>                    read a post/draft back -- status, channel, text, assets
   buf list   [channel]                    list drafts -- id, status, channel, text, image attached. Read-only
   buf delete <post-id>                    PERMANENTLY deletes a post/draft -- irreversible, no undo
+  buf version                             print version, commit and build date
 
 Both real channels have an unpaused queue, so post/thread/image publish for real -- there is no
 "safe" queue state for them. idea and draft are the only two verbs that never reach an audience.
@@ -109,6 +110,8 @@ func main() {
 			failUsage()
 		}
 		cmdDelete(rest[0])
+	case "version", "-v", "--version":
+		cmdVersion()
 	case "", "-h", "--help", "help":
 		fmt.Print(usageText)
 	default:
