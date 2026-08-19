@@ -2,3 +2,7 @@
 state/
 .env
 dist/
+
+# buf-cli: regenerable channel cache, real ids for whichever account ran it
+.buf-channels.json
+buf
