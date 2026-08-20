@@ -268,6 +268,88 @@ func cmdDraft(channelArg, file string) {
 	handleDraftResult(channelArg, result, resp)
 }
 
+// cmdAttachImage attaches an image to an EXISTING post/draft via the
+// editPost mutation. Unlike image/draft-image, it never creates a new
+// post and never touches text, status, schedule, or channel -- the
+// editPost request sends ONLY id + assets. url must already be a public,
+// Buffer-hotlink-safe URL (GitHub raw works, Google Drive's usercontent
+// download link works -- see driveUploadAndShare above for why Drive is
+// used elsewhere); this verb does no upload of its own, so a local file
+// path is rejected rather than silently failing at Buffer's end.
+func cmdAttachImage(postID, url string) {
+	if strings.TrimSpace(postID) == "" {
+		blocked("post id is required")
+	}
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		blocked("not a public image URL (must start with http:// or https://): %s -- use 'bfr image'/'bfr draft-image' to upload a local file", url)
+	}
+	assets := []map[string]interface{}{{"image": map[string]string{"url": url}}}
+
+	c := newClient()
+	result, resp, err := c.EditPost(bufferclient.EditPostInput{ID: postID, Assets: assets})
+	if err != nil {
+		blockedResponse(err.Error(), resp)
+	}
+	switch result.Typename {
+	case "PostActionSuccess":
+		fmt.Printf("IMAGE ATTACHED: post id=%s status=%s\n", result.PostID, result.Status)
+	case "":
+		blockedResponse("unexpected response", resp)
+	default:
+		msg := result.Message
+		if msg == "" {
+			msg = "unknown error"
+		}
+		blocked("(%s): %s", result.Typename, msg)
+	}
+}
+
+// cmdUpdate replaces an EXISTING draft's text via the editPost mutation.
+// Unlike attach-image, it never touches assets, status, schedule, or
+// channel -- the editPost request sends ONLY id + text. It refuses to run
+// against anything whose status is not "draft", read back first via Get,
+// so it is impossible to accidentally edit something queued or published.
+// Same never-posts guarantee as draft/idea/attach-image: a third safe verb,
+// not a fourth mutation pathway with different risk.
+func cmdUpdate(postID, file string) {
+	if strings.TrimSpace(postID) == "" {
+		blocked("post id is required")
+	}
+	text, err := readBody(file)
+	if err != nil {
+		blocked("%s", err)
+	}
+
+	c := newClient()
+	before, resp, err := c.Get(postID)
+	if err != nil {
+		blockedResponse(err.Error(), resp)
+	}
+	if before.Status != "draft" {
+		blocked("post %s has status '%s', not 'draft' -- update refuses to touch anything that is queued or published. Only a draft is safe to edit in place.", postID, before.Status)
+	}
+
+	result, resp, err := c.EditPost(bufferclient.EditPostInput{ID: postID, Text: &text})
+	if err != nil {
+		blockedResponse(err.Error(), resp)
+	}
+	switch result.Typename {
+	case "PostActionSuccess":
+		if result.Status != "draft" {
+			blocked("post %s is now status '%s', not 'draft' -- it changed between the preflight check and this edit. The edit was applied; verify it did not land on something no longer safe to touch.", result.PostID, result.Status)
+		}
+		fmt.Printf("UPDATED: post id=%s status=%s\n", result.PostID, result.Status)
+	case "":
+		blockedResponse("unexpected response", resp)
+	default:
+		msg := result.Message
+		if msg == "" {
+			msg = "unknown error"
+		}
+		blocked("(%s): %s", result.Typename, msg)
+	}
+}
+
 func cmdDelete(postID string) {
 	c := newClient()
 	result, resp, err := c.Delete(postID)
