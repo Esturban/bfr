@@ -173,11 +173,14 @@ func (c *Client) CreatePost(input PostInput) (PostResult, []byte, error) {
 // EditPostInput is the shape editPost accepts. Only ID is required --
 // every other field is optional and omitted when not set, so a caller that
 // only wants to attach an asset (the attach-image verb's whole purpose)
-// sends nothing else: no text, no mode, no schedulingType. editPost is the
+// sends nothing else: no text, no mode, no schedulingType. A caller that
+// only wants to change text (the update verb's whole purpose) sends nothing
+// but ID and Text: no assets, no mode, no schedulingType. editPost is the
 // sibling mutation to createPost that changes an EXISTING post/draft rather
 // than creating a new one.
 type EditPostInput struct {
 	ID     string      `json:"id"`
+	Text   string      `json:"text,omitempty"`
 	Assets interface{} `json:"assets,omitempty"`
 }
 
