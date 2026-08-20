@@ -329,12 +329,15 @@ func cmdUpdate(postID, file string) {
 		blocked("post %s has status '%s', not 'draft' -- update refuses to touch anything that is queued or published. Only a draft is safe to edit in place.", postID, before.Status)
 	}
 
-	result, resp, err := c.EditPost(bufferclient.EditPostInput{ID: postID, Text: text})
+	result, resp, err := c.EditPost(bufferclient.EditPostInput{ID: postID, Text: &text})
 	if err != nil {
 		blockedResponse(err.Error(), resp)
 	}
 	switch result.Typename {
 	case "PostActionSuccess":
+		if result.Status != "draft" {
+			blocked("post %s is now status '%s', not 'draft' -- it changed between the preflight check and this edit. The edit was applied; verify it did not land on something no longer safe to touch.", result.PostID, result.Status)
+		}
 		fmt.Printf("UPDATED: post id=%s status=%s\n", result.PostID, result.Status)
 	case "":
 		blockedResponse("unexpected response", resp)
