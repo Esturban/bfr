@@ -170,6 +170,55 @@ func (c *Client) CreatePost(input PostInput) (PostResult, []byte, error) {
 	}, resp, nil
 }
 
+// EditPostInput is the shape editPost accepts. Only ID is required --
+// every other field is optional and omitted when not set, so a caller that
+// only wants to attach an asset (the attach-image verb's whole purpose)
+// sends nothing else: no text, no mode, no schedulingType. A caller that
+// only wants to change text (the update verb's whole purpose) sends nothing
+// but ID and Text: no assets, no mode, no schedulingType. editPost is the
+// sibling mutation to createPost that changes an EXISTING post/draft rather
+// than creating a new one.
+type EditPostInput struct {
+	ID     string      `json:"id"`
+	Text   *string     `json:"text,omitempty"`
+	Assets interface{} `json:"assets,omitempty"`
+}
+
+const editPostQuery = `mutation($input: EditPostInput!) { editPost(input: $input) { __typename ... on PostActionSuccess { post { id status } } ... on NotFoundError { message } ... on UnauthorizedError { message } ... on UnexpectedError { message } ... on RestProxyError { code message link } ... on LimitReachedError { message } ... on InvalidInputError { message } } }`
+
+// EditPost runs the editPost mutation and returns the raw response
+// alongside the parsed union result, mirroring CreatePost -- same
+// PostResult shape, same "typename tells you which union branch fired"
+// contract, so callers already handling CreatePost/handlePostResult-style
+// results can handle EditPost's the same way.
+func (c *Client) EditPost(input EditPostInput) (PostResult, []byte, error) {
+	resp, err := c.Raw(editPostQuery, map[string]interface{}{"input": input})
+	if err != nil {
+		return PostResult{}, nil, err
+	}
+	var parsed struct {
+		Data struct {
+			EditPost struct {
+				Typename string `json:"__typename"`
+				Post     struct {
+					ID     string `json:"id"`
+					Status string `json:"status"`
+				} `json:"post"`
+				Message string `json:"message"`
+			} `json:"editPost"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp, &parsed); err != nil {
+		return PostResult{}, resp, fmt.Errorf("decoding editPost response: %w", err)
+	}
+	return PostResult{
+		Typename: parsed.Data.EditPost.Typename,
+		PostID:   parsed.Data.EditPost.Post.ID,
+		Status:   parsed.Data.EditPost.Post.Status,
+		Message:  parsed.Data.EditPost.Message,
+	}, resp, nil
+}
+
 const createIdeaQuery = `mutation($input: CreateIdeaInput!) { createIdea(input: $input) { __typename ... on Idea { id } ... on IdeaResponse { idea { id } } ... on InvalidInputError { message } ... on UnauthorizedError { message } ... on UnexpectedError { message } ... on LimitReachedError { message } } }`
 
 // IdeaResult is the union createIdea returns, flattened.
