@@ -33,6 +33,8 @@ const usageText = `Usage: bfr <command> [args]
   bfr thread <channel> <file.md>          PUBLISHES LIVE -- '---' blocks become a thread, will post
   bfr image  <channel> <file.md> <path>   PUBLISHES LIVE -- drive-upload, attach, queue, will post
   bfr draft-image <channel> <file.md> <path>   draft ON the channel WITH an image -- never posts
+  bfr attach-image <post-id> <url>        attach an image to an EXISTING draft/post -- never creates a
+                                           new one, never changes text/status/schedule
   bfr show   <post-id>                    read a post/draft back -- status, channel, text, assets
   bfr list   [channel]                    list drafts -- id, status, channel, text, image attached. Read-only
   bfr delete <post-id>                    PERMANENTLY deletes a post/draft -- irreversible, no undo
@@ -94,6 +96,11 @@ func main() {
 			failUsage()
 		}
 		cmdDraftImage(rest[0], rest[1], rest[2])
+	case "attach-image":
+		if len(rest) < 2 {
+			failUsage()
+		}
+		cmdAttachImage(rest[0], rest[1])
 	case "show":
 		if len(rest) < 1 {
 			failUsage()
