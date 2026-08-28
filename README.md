@@ -59,6 +59,7 @@ The image verbs (`image`, `draft-image`) additionally require:
 | `bfr thread <channel> <file.md>` | **Publishes live** -- `---`-delimited blocks become a thread |
 | `bfr image <channel> <file.md> <path>` | **Publishes live** -- Drive upload, attach, queue |
 | `bfr draft-image <channel> <file.md> <path>` | Draft on the channel with an image -- never posts |
+| `bfr attach-image <post-id> <url>` | Attach an image to an EXISTING draft/post -- never creates a new one, never changes text/status/schedule |
 | `bfr show <post-id>` | Read a post/draft back -- status, channel, text, assets |
 | `bfr list [channel]` | List drafts -- id, status, channel, text, image flag (read-only) |
 | `bfr delete <post-id>` | **Permanently deletes** a post/draft -- irreversible |
@@ -70,6 +71,11 @@ The image verbs (`image`, `draft-image`) additionally require:
 Both connected channels have an unpaused queue, so `post`/`thread`/`image`
 publish for real; there is no "safe" queue state for them. `idea` and
 `draft`/`draft-image` are the only verbs that never reach an audience.
+
+`attach-image` takes an already-public URL (not a local file path) and
+edits an existing post/draft in place -- it does no Drive upload of its
+own and does not require `BUFFER_DRIVE_ACCOUNT`/`gog`/`sips`. Use
+`image`/`draft-image` when the image is still a local file.
 
 ## Example
 
