@@ -111,7 +111,8 @@ func main() {
 		if len(rest) < 1 {
 			failUsage()
 		}
-		cmdShow(rest[0])
+		full := len(rest) >= 2 && rest[1] == "--full"
+		cmdShow(rest[0], full)
 	case "list":
 		channelArg := ""
 		if len(rest) >= 1 {
