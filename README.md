@@ -55,6 +55,7 @@ The image verbs (`image`, `draft-image`) additionally require:
 | `bfr channels` | List channel ids/names, cache to `.bfr-channels.json` |
 | `bfr idea <file.md>` | Post to the ideas board -- no channel attached, never posts |
 | `bfr draft <channel> <file.md>` | Draft on the channel (`saveToDraft`) -- never posts |
+| `bfr schedule <channel> <file.md> <ISO8601-datetime>` | Schedule for a future time (`customScheduled`) -- will post at that time |
 | `bfr post <channel> <file.md>` | **Publishes live** -- queues to the channel, will post |
 | `bfr thread <channel> <file.md>` | **Publishes live** -- `---`-delimited blocks become a thread |
 | `bfr image <channel> <file.md> <path>` | **Publishes live** -- Drive upload, attach, queue |
