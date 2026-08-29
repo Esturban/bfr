@@ -59,7 +59,7 @@ func cmdChannels() {
 	}
 }
 
-func cmdShow(postID string) {
+func cmdShow(postID string, full bool) {
 	c := newClient()
 	post, resp, err := c.Get(postID)
 	if err != nil {
@@ -68,7 +68,11 @@ func cmdShow(postID string) {
 	fmt.Printf("id:      %s\n", post.ID)
 	fmt.Printf("status:  %s\n", post.Status)
 	fmt.Printf("channel: %s (%s)\n", post.Channel.Name, post.Channel.Service)
-	fmt.Printf("text:    %s\n", truncate(post.Text, 100))
+	if full {
+		fmt.Printf("text:    %s\n", post.Text)
+	} else {
+		fmt.Printf("text:    %s\n", truncate(post.Text, 100))
+	}
 	if len(post.Assets) == 0 {
 		fmt.Println("assets:  none attached")
 		return
