@@ -180,6 +180,7 @@ func (c *Client) CreatePost(input PostInput) (PostResult, []byte, error) {
 // than creating a new one.
 type EditPostInput struct {
 	ID     string      `json:"id"`
+	Text   *string     `json:"text,omitempty"`
 	Assets interface{} `json:"assets,omitempty"`
 }
 

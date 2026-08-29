@@ -61,6 +61,7 @@ The image verbs (`image`, `draft-image`) additionally require:
 | `bfr image <channel> <file.md> <path>` | **Publishes live** -- Drive upload, attach, queue |
 | `bfr draft-image <channel> <file.md> <path>` | Draft on the channel with an image -- never posts |
 | `bfr attach-image <post-id> <url>` | Attach an image to an EXISTING draft/post -- never creates a new one, never changes text/status/schedule |
+| `bfr update <post-id> <file.md>` | Replace an EXISTING draft's text -- refuses anything not a draft, never touches status/schedule/channel/assets |
 | `bfr show <post-id> [--full]` | Read a post/draft back -- status, channel, text, assets. Text truncates to 100 chars by default; `--full` prints it untruncated (needed to verify anything appended past that point, e.g. hashtags) |
 | `bfr list [channel]` | List drafts -- id, status, channel, text, image flag (read-only) |
 | `bfr delete <post-id>` | **Permanently deletes** a post/draft -- irreversible |
