@@ -117,14 +117,16 @@ func (c *Client) Channels(orgID string) ([]Channel, []byte, error) {
 	return parsed.Data.Channels, resp, nil
 }
 
-// PostInput is the shape createPost accepts. Mode is always "addToQueue" --
-// this client queues or drafts, it never calls a share-immediately mutation.
+// PostInput is the shape createPost accepts. Mode is "addToQueue" (queue or
+// draft) or "customScheduled" (schedule for a specific dueAt) -- this client
+// never calls a share-immediately mutation.
 type PostInput struct {
 	Text           string      `json:"text"`
 	ChannelID      string      `json:"channelId"`
 	SchedulingType string      `json:"schedulingType"`
 	Mode           string      `json:"mode"`
 	SaveToDraft    bool        `json:"saveToDraft,omitempty"`
+	DueAt          string      `json:"dueAt,omitempty"`
 	Metadata       interface{} `json:"metadata,omitempty"`
 	Assets         interface{} `json:"assets,omitempty"`
 }

@@ -29,6 +29,7 @@ const usageText = `Usage: bfr <command> [args]
   bfr channels                            list channel ids, cache to .bfr-channels.json
   bfr idea   <file.md>                    ideas board, no channel attached -- never posts
   bfr draft  <channel> <file.md>          draft ON the channel (saveToDraft) -- never posts
+  bfr schedule <channel> <file.md> <ISO8601-datetime>   schedule for a future time (customScheduled) -- will post at that time
   bfr post   <channel> <file.md>          PUBLISHES LIVE -- queues to the channel, will post
   bfr thread <channel> <file.md>          PUBLISHES LIVE -- '---' blocks become a thread, will post
   bfr image  <channel> <file.md> <path>   PUBLISHES LIVE -- drive-upload, attach, queue, will post
@@ -76,6 +77,11 @@ func main() {
 			failUsage()
 		}
 		cmdDraft(rest[0], rest[1])
+	case "schedule":
+		if len(rest) < 3 {
+			failUsage()
+		}
+		cmdSchedule(rest[0], rest[1], rest[2])
 	case "post":
 		if len(rest) < 2 {
 			failUsage()

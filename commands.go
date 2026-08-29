@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Esturban/bfr/bufferclient"
 )
@@ -266,6 +267,54 @@ func cmdDraft(channelArg, file string) {
 		blockedResponse(err.Error(), resp)
 	}
 	handleDraftResult(channelArg, result, resp)
+}
+
+// handleScheduleResult is deliberately separate from handlePostResult and
+// handleDraftResult: schedule must never be mistaken for either -- its
+// success line says SCHEDULED, never QUEUED or DRAFT.
+func handleScheduleResult(dueAt string, result bufferclient.PostResult, resp []byte) {
+	switch result.Typename {
+	case "PostActionSuccess":
+		fmt.Printf("SCHEDULED for %s: post id=%s status=%s\n", dueAt, result.PostID, result.Status)
+	case "":
+		blockedResponse("unexpected response", resp)
+	default:
+		msg := result.Message
+		if msg == "" {
+			msg = "unknown error"
+		}
+		blocked("(%s): %s", result.Typename, msg)
+	}
+}
+
+// cmdSchedule creates a post on the channel with mode: customScheduled and
+// dueAt set to the given ISO 8601 datetime -- a real future-scheduled post,
+// distinct from addToQueue and from saveToDraft. The datetime is validated
+// locally (parses as RFC3339, is in the future) before any network call.
+func cmdSchedule(channelArg, file, datetime string) {
+	dueAt, err := time.Parse(time.RFC3339, datetime)
+	if err != nil {
+		blocked("invalid datetime %q, expected ISO 8601 (RFC3339), e.g. 2026-09-01T14:00:00Z: %s", datetime, err)
+	}
+	if !dueAt.After(time.Now()) {
+		blocked("datetime %q is not in the future", datetime)
+	}
+	channel, err := resolveChannel(channelArg)
+	if err != nil {
+		blocked("%s", err)
+	}
+	text, err := readBody(file)
+	if err != nil {
+		blocked("%s", err)
+	}
+	c := newClient()
+	result, resp, err := c.CreatePost(bufferclient.PostInput{
+		Text: text, ChannelID: channel, SchedulingType: "automatic", Mode: "customScheduled", DueAt: dueAt.UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		blockedResponse(err.Error(), resp)
+	}
+	handleScheduleResult(dueAt.UTC().Format(time.RFC3339), result, resp)
 }
 
 // cmdAttachImage attaches an image to an EXISTING post/draft via the
