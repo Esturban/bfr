@@ -27,6 +27,44 @@ func blockedResponse(msg string, resp []byte) {
 	os.Exit(1)
 }
 
+// riyadhLoc and newYorkLoc back the three-zone due-time display added for
+// CMO-2558: ten posts sat at 20:00 UTC (23:00 Riyadh) with nothing in the
+// tool surfacing that in a zone a human actually reads in. Falls back to a
+// fixed offset if the build's tzdata is unavailable rather than silently
+// printing UTC under a Riyadh/New York label -- that substitution would be
+// exactly the kind of silent wrongness this ticket exists to close (Riyadh
+// has no DST so a fixed +03:00 is exact; New York does observe DST, so its
+// fallback is an approximation and callers should prefer the loaded zone).
+var riyadhLoc = mustLoadLocation("Asia/Riyadh", 3*60*60)
+var newYorkLoc = mustLoadLocation("America/New_York", -5*60*60)
+
+func mustLoadLocation(name string, fallbackOffsetSeconds int) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return time.FixedZone(name, fallbackOffsetSeconds)
+	}
+	return loc
+}
+
+// parseDueAt parses a dueAt string as the API actually returns it, which
+// carries fractional seconds (observed live, CMO-2558: dueAt comes back as
+// e.g. "2026-09-14T12:00:00.000Z"). time.RFC3339Nano's fractional-second
+// placeholder is optional-width, so it also parses a dueAt with none.
+func parseDueAt(s string) (time.Time, error) {
+	return time.Parse(time.RFC3339Nano, s)
+}
+
+// formatDueAtTriple renders one dueAt in UTC, Riyadh and New York together.
+func formatDueAtTriple(raw string) (utcStr, riyadhStr, nyStr string) {
+	t, err := parseDueAt(raw)
+	if err != nil {
+		bad := raw + " (unparseable)"
+		return bad, bad, bad
+	}
+	const layout = "2006-01-02 15:04 MST"
+	return t.UTC().Format(layout), t.In(riyadhLoc).Format(layout), t.In(newYorkLoc).Format(layout)
+}
+
 func newClient() *bufferclient.Client {
 	tok, err := apiToken()
 	if err != nil {
@@ -85,6 +123,11 @@ func cmdShow(postID string, full bool) {
 	}
 }
 
+// cmdList shows drafts and scheduled posts together -- CMO-2558: ten posts
+// sat scheduled at 20:00 UTC (23:00 Riyadh) with nothing showing it, because
+// this used to query drafts only. A scheduled post's due time prints in
+// UTC, Riyadh and New York together so a clustered/wrong time is visible at
+// a glance instead of needing a separate lookup per zone.
 func cmdList(channelArg string) {
 	c := newClient()
 	org, err := orgID(c)
@@ -102,12 +145,20 @@ func cmdList(channelArg string) {
 	if err != nil {
 		blockedResponse(err.Error(), resp)
 	}
+	fmt.Println("id\tstatus\tchannel\tdue(UTC)\tdue(Riyadh)\tdue(NewYork)\ttext\timage")
 	for _, it := range items {
-		imageFlag := "image=NO"
+		imageFlag := "NO"
 		if len(it.Assets) > 0 {
-			imageFlag = "image=yes"
+			imageFlag = "yes"
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\n", it.ID, it.CreatedAt, it.Status, it.Channel.Name, truncate(it.Text, 50), imageFlag)
+		// A draft can carry a stale dueAt left over from a prior schedule that
+		// was reset -- it is not authoritative unless status is "scheduled",
+		// so only a scheduled post's due time is shown.
+		utcStr, riyadhStr, nyStr := "-", "-", "-"
+		if it.Status == "scheduled" && it.DueAt != "" {
+			utcStr, riyadhStr, nyStr = formatDueAtTriple(it.DueAt)
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", it.ID, it.Status, it.Channel.Name, utcStr, riyadhStr, nyStr, truncate(it.Text, 50), imageFlag)
 	}
 }
 
@@ -279,13 +330,36 @@ func cmdDraft(channelArg, file string) {
 // handleScheduleResult is deliberately separate from handlePostResult and
 // handleDraftResult: schedule must never be mistaken for either -- its
 // success line says SCHEDULED, never QUEUED or DRAFT.
-func handleScheduleResult(dueAt string, result bufferclient.PostResult, resp []byte) {
+//
+// CMO-2558: editPost returning PostActionSuccess is NOT proof the time
+// actually changed -- an "automatic" scheduling-type post accepted a new
+// dueAt and silently kept its old one, ten times in a row, the night this
+// ticket was filed. So a bare "success" typename is never trusted here:
+// this re-reads the post via Get and compares the ACTUAL resulting dueAt to
+// what was requested (5s tolerance for API-side sub-second rounding) and
+// confirms status is still "scheduled". Either check failing blocks loudly
+// naming the mismatch, never a silent pass-through.
+func handleScheduleResult(c *bufferclient.Client, postID, requestedDueAt string, result bufferclient.PostResult, resp []byte) {
 	switch result.Typename {
 	case "PostActionSuccess":
-		if result.Status != "scheduled" {
-			blocked("post %s came back status '%s', not 'scheduled' -- editPost returned success but did not actually apply the schedule. Response:\n%s", result.PostID, result.Status, resp)
+		after, afterResp, err := c.Get(postID)
+		if err != nil {
+			blocked("editPost reported success for post %s, but the re-read to confirm it failed: %s. Do not trust the change happened.", postID, err)
 		}
-		fmt.Printf("SCHEDULED for %s: post id=%s status=%s\n", dueAt, result.PostID, result.Status)
+		if after.Status != "scheduled" {
+			blocked("editPost for post %s returned success, but the re-read shows status %q, not 'scheduled'. Do not trust the change happened.", postID, after.Status)
+		}
+		wanted, wErr := parseDueAt(requestedDueAt)
+		got, gErr := parseDueAt(after.DueAt)
+		if wErr != nil || gErr != nil {
+			blockedResponse(fmt.Sprintf("editPost for post %s returned success, but the re-read dueAt could not be parsed for comparison (requested=%q got=%q)", postID, requestedDueAt, after.DueAt), afterResp)
+		}
+		if diff := got.Sub(wanted); diff < -5*time.Second || diff > 5*time.Second {
+			utcStr, riyadhStr, nyStr := formatDueAtTriple(after.DueAt)
+			blocked("editPost for post %s returned success, but the re-read shows dueAt still %s / %s Riyadh / %s New York -- the requested time did NOT take effect. This is the CMO-2558 silent-no-op defect: a success response that changes nothing.", postID, utcStr, riyadhStr, nyStr)
+		}
+		utcStr, riyadhStr, nyStr := formatDueAtTriple(after.DueAt)
+		fmt.Printf("SCHEDULED and CONFIRMED by re-read: post id=%s now due %s / %s Riyadh / %s New York\n", postID, utcStr, riyadhStr, nyStr)
 	case "":
 		blockedResponse("unexpected response", resp)
 	default:
@@ -297,16 +371,29 @@ func handleScheduleResult(dueAt string, result bufferclient.PostResult, resp []b
 	}
 }
 
-// cmdSchedule gives an EXISTING draft a future scheduled date via editPost,
-// setting only mode/schedulingType/dueAt -- never creates a new post, and
-// never touches the draft's text, assets, or channel. Refuses anything that
-// is not currently a draft (queued or already-scheduled posts are not safe
-// to reschedule here), and refuses a past or malformed datetime, before any
-// network call. This replaces the earlier file-based signature
-// (bfr schedule <channel> <file.md> <datetime>, which created a NEW post)
-// per EV, 2026-08-29: scheduling an EV-approved draft must never mean
-// re-uploading it -- that file-based path had never been used, so nothing
-// depends on the old signature.
+// cmdSchedule gives an EXISTING post a scheduled date via editPost, never
+// creating a new post. It accepts two starting states:
+//
+//   - draft -> scheduled (the original behavior, ffdc289): the two
+//     undocumented requirements found by live trial (CMO-2424) still apply --
+//     schedulingType:"automatic" and an explicit saveToDraft:false are both
+//     required alongside mode:customScheduled, or the post silently stays a
+//     draft despite a PostActionSuccess response.
+//   - scheduled -> a new dueAt ("retime"): CMO-2558's actual defect. Every
+//     post created through the normal queue path carries schedulingType
+//     "automatic", meaning Buffer derives dueAt from the channel's own
+//     posting schedule -- sending a bare dueAt to editPost on such a post
+//     returns PostActionSuccess and silently changes nothing. Verified live
+//     against the real account, 2026-08-30 (CMO-2558): the field that
+//     actually pins the time is mode:customScheduled alone -- adding
+//     schedulingType or saveToDraft to THIS call is not part of the proven
+//     working mutation, so they are only sent for the draft path above.
+//
+// Anything else (queued, sent, published) is refused -- not safe to touch
+// here. Refuses a past or malformed datetime before any network call.
+// editPost REPLACES the post, so text and any attached assets are always
+// read back via the preflight Get and echoed unchanged, so a scheduled post
+// carrying an image never loses it to this call.
 func cmdSchedule(postID, datetime string) {
 	if strings.TrimSpace(postID) == "" {
 		blocked("post id is required")
@@ -324,30 +411,39 @@ func cmdSchedule(postID, datetime string) {
 	if err != nil {
 		blockedResponse(err.Error(), resp)
 	}
-	if before.Status != "draft" {
-		blocked("post %s has status '%s', not 'draft' -- schedule refuses to touch anything that is not currently a draft.", postID, before.Status)
+	if before.Status != "draft" && before.Status != "scheduled" {
+		blocked("post %s has status '%s' -- schedule only moves a draft to a scheduled time, or retimes an already-scheduled post. Anything else is not safe to touch here.", postID, before.Status)
 	}
 
 	mode := "customScheduled"
-	schedulingType := "automatic"
-	saveToDraft := false
 	dueAtStr := dueAt.UTC().Format(time.RFC3339)
-	// editPost has two undocumented requirements, found by live introspection
-	// and trial (CMO-2424): (1) InvalidInputError "Post must have either text
-	// or media" fires unless text is present in the submitted input, even
-	// though the post already has both stored -- echoing back the unchanged
-	// text (read via the preflight Get above) satisfies it without altering
-	// content; (2) omitting saveToDraft leaves status silently unchanged at
-	// "draft" (PostActionSuccess, no error, but nothing actually scheduled)
-	// -- saveToDraft: false must be sent explicitly to move a draft to
-	// "scheduled".
-	result, resp, err := c.EditPost(bufferclient.EditPostInput{
-		ID: postID, Text: &before.Text, Mode: &mode, SchedulingType: &schedulingType, DueAt: &dueAtStr, SaveToDraft: &saveToDraft,
-	})
+
+	var assets interface{}
+	if len(before.Assets) > 0 {
+		list := make([]map[string]interface{}, 0, len(before.Assets))
+		for _, a := range before.Assets {
+			img := map[string]string{"url": a.Source}
+			if a.Thumbnail != "" {
+				img["thumbnailUrl"] = a.Thumbnail
+			}
+			list = append(list, map[string]interface{}{"image": img})
+		}
+		assets = list
+	}
+
+	input := bufferclient.EditPostInput{ID: postID, Text: &before.Text, Mode: &mode, DueAt: &dueAtStr, Assets: assets}
+	if before.Status == "draft" {
+		schedulingType := "automatic"
+		saveToDraft := false
+		input.SchedulingType = &schedulingType
+		input.SaveToDraft = &saveToDraft
+	}
+
+	result, resp, err := c.EditPost(input)
 	if err != nil {
 		blockedResponse(err.Error(), resp)
 	}
-	handleScheduleResult(dueAtStr, result, resp)
+	handleScheduleResult(c, postID, dueAtStr, result, resp)
 }
 
 // cmdAttachImage attaches an image to an EXISTING post/draft via the
