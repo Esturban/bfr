@@ -29,8 +29,9 @@ const usageText = `Usage: bfr <command> [args]
   bfr channels                            list channel ids, cache to .bfr-channels.json
   bfr idea   <file.md>                    ideas board, no channel attached -- never posts
   bfr draft  <channel> <file.md>          draft ON the channel (saveToDraft) -- never posts
-  bfr schedule <post-id> <ISO8601-datetime>   give an EXISTING draft a future date (customScheduled) --
-                                           never creates a new post, never touches text/image/channel
+  bfr schedule <post-id> <ISO8601-datetime>   give an EXISTING draft a future date, or retime an
+                                           already-scheduled post (customScheduled) -- never creates
+                                           a new post; confirms the change by re-reading it back
   bfr post   <channel> <file.md>          PUBLISHES LIVE -- queues to the channel, will post
   bfr thread <channel> <file.md>          PUBLISHES LIVE -- '---' blocks become a thread, will post
   bfr image  <channel> <file.md> <path>   PUBLISHES LIVE -- drive-upload, attach, queue, will post
@@ -40,7 +41,8 @@ const usageText = `Usage: bfr <command> [args]
   bfr update <post-id> <file.md>          replace an EXISTING draft's text -- refuses anything not a
                                            draft, never touches status/schedule/channel/assets
   bfr show   <post-id> [--full]           read a post/draft back -- status, channel, text, assets
-  bfr list   [channel]                    list drafts -- id, status, channel, text, image attached. Read-only
+  bfr list   [channel]                    list drafts AND scheduled posts -- id, status, channel, due
+                                           time in UTC/Riyadh/New York, text, image attached. Read-only
   bfr delete <post-id>                    PERMANENTLY deletes a post/draft -- irreversible, no undo
   bfr version                             print version, commit and build date
 

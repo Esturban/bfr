@@ -279,10 +279,11 @@ type Asset struct {
 
 // PostDetail is the read shape returned by Get (bfr show).
 type PostDetail struct {
-	ID      string `json:"id"`
-	Status  string `json:"status"`
-	DueAt   string `json:"dueAt"`
-	Channel struct {
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	DueAt          string `json:"dueAt"`
+	SchedulingType string `json:"schedulingType"`
+	Channel        struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
 		Service string `json:"service"`
@@ -294,7 +295,7 @@ type PostDetail struct {
 // Get reads a single post/draft back by id. Read-only.
 func (c *Client) Get(postID string) (*PostDetail, []byte, error) {
 	resp, err := c.Raw(
-		`query($id: PostId!) { post(input:{id:$id}) { id status dueAt channel { id name service } text assets { mimeType source thumbnail } } }`,
+		`query($id: PostId!) { post(input:{id:$id}) { id status dueAt schedulingType channel { id name service } text assets { mimeType source thumbnail } } }`,
 		map[string]string{"id": postID},
 	)
 	if err != nil {
@@ -311,13 +312,19 @@ func (c *Client) Get(postID string) (*PostDetail, []byte, error) {
 	return parsed.Data.Post, resp, nil
 }
 
-// ListItem is one row from List.
+// ListItem is one row from List. DueAt and SchedulingType are only
+// populated for scheduled posts -- a draft has no due time yet. CMO-2558:
+// ten posts sat scheduled at 20:00 UTC (23:00 Riyadh) with no way to see
+// them, because List only ever queried status:[draft]. It now also queries
+// status:[scheduled] so the same command surfaces both.
 type ListItem struct {
-	ID        string `json:"id"`
-	Status    string `json:"status"`
-	Text      string `json:"text"`
-	CreatedAt string `json:"createdAt"`
-	Channel   struct {
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	Text           string `json:"text"`
+	CreatedAt      string `json:"createdAt"`
+	DueAt          string `json:"dueAt"`
+	SchedulingType string `json:"schedulingType"`
+	Channel        struct {
 		Name    string `json:"name"`
 		Service string `json:"service"`
 	} `json:"channel"`
@@ -327,12 +334,13 @@ type ListItem struct {
 	} `json:"assets"`
 }
 
-// List returns up to 50 draft posts, optionally filtered to one channel id,
-// oldest first by createdAt -- so a caller picking "the ten oldest drafts"
-// can trust list order rather than post id order, which is not guaranteed
-// to be chronological.
+// List returns up to 50 draft and scheduled posts, optionally filtered to
+// one channel id. Sorted by dueAt where a post has one (scheduled posts,
+// soonest first) and otherwise by createdAt (drafts have no due time), so a
+// caller scanning the output sees the schedule in the order it will
+// actually fire, with drafts trailing in creation order.
 func (c *Client) List(orgID string, channelID string) ([]ListItem, []byte, error) {
-	filter := map[string]interface{}{"status": []string{"draft"}}
+	filter := map[string]interface{}{"status": []string{"draft", "scheduled"}}
 	if channelID != "" {
 		filter["channelIds"] = []string{channelID}
 	}
@@ -343,7 +351,7 @@ func (c *Client) List(orgID string, channelID string) ([]ListItem, []byte, error
 		},
 	}
 	resp, err := c.Raw(
-		`query($input: PostsInput!) { posts(input:$input, first:50) { edges { node { id status text createdAt channel { name service } assets { mimeType source } } } } }`,
+		`query($input: PostsInput!) { posts(input:$input, first:50) { edges { node { id status text createdAt dueAt schedulingType channel { name service } assets { mimeType source } } } } }`,
 		vars,
 	)
 	if err != nil {
@@ -365,8 +373,19 @@ func (c *Client) List(orgID string, channelID string) ([]ListItem, []byte, error
 	for _, e := range parsed.Data.Posts.Edges {
 		items = append(items, e.Node)
 	}
-	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
+	sort.Slice(items, func(i, j int) bool { return sortKey(items[i]) < sortKey(items[j]) })
 	return items, resp, nil
+}
+
+// sortKey orders a scheduled post by its dueAt and everything else by when
+// it was created. A draft can carry a stale dueAt left over from a prior
+// schedule that was reset, so DueAt is only trusted as a sort key when
+// status is actually "scheduled".
+func sortKey(it ListItem) string {
+	if it.Status == "scheduled" && it.DueAt != "" {
+		return it.DueAt
+	}
+	return it.CreatedAt
 }
 
 const deletePostQuery = `mutation($input: DeletePostInput!) { deletePost(input: $input) { __typename ... on DeletePostSuccess { id } ... on VoidMutationError { message } } }`

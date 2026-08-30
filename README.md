@@ -55,7 +55,7 @@ The image verbs (`image`, `draft-image`) additionally require:
 | `bfr channels` | List channel ids/names, cache to `.bfr-channels.json` |
 | `bfr idea <file.md>` | Post to the ideas board -- no channel attached, never posts |
 | `bfr draft <channel> <file.md>` | Draft on the channel (`saveToDraft`) -- never posts |
-| `bfr schedule <channel> <file.md> <ISO8601-datetime>` | Schedule for a future time (`customScheduled`) -- will post at that time |
+| `bfr schedule <post-id> <ISO8601-datetime>` | Move an EXISTING draft to a scheduled time, or retime an already-scheduled post -- never creates a new post, confirms the change by re-reading it back |
 | `bfr post <channel> <file.md>` | **Publishes live** -- queues to the channel, will post |
 | `bfr thread <channel> <file.md>` | **Publishes live** -- `---`-delimited blocks become a thread |
 | `bfr image <channel> <file.md> <path>` | **Publishes live** -- Drive upload, attach, queue |
@@ -63,7 +63,7 @@ The image verbs (`image`, `draft-image`) additionally require:
 | `bfr attach-image <post-id> <url>` | Attach an image to an EXISTING draft/post -- never creates a new one, never changes text/status/schedule |
 | `bfr update <post-id> <file.md>` | Replace an EXISTING draft's text -- refuses anything not a draft, never touches status/schedule/channel/assets |
 | `bfr show <post-id> [--full]` | Read a post/draft back -- status, channel, text, assets. Text truncates to 100 chars by default; `--full` prints it untruncated (needed to verify anything appended past that point, e.g. hashtags) |
-| `bfr list [channel]` | List drafts -- id, status, channel, text, image flag (read-only) |
+| `bfr list [channel]` | List drafts AND scheduled posts -- id, status, channel, due time in UTC/Riyadh/New York, text, image flag (read-only) |
 | `bfr delete <post-id>` | **Permanently deletes** a post/draft -- irreversible |
 | `bfr version` | Print version, commit and build date |
 
@@ -78,6 +78,35 @@ publish for real; there is no "safe" queue state for them. `idea` and
 edits an existing post/draft in place -- it does no Drive upload of its
 own and does not require `BUFFER_DRIVE_ACCOUNT`/`gog`/`sips`. Use
 `image`/`draft-image` when the image is still a local file.
+
+## The silent-no-op defect (schedule)
+
+Every post created through the normal queue path carries
+`schedulingType: "automatic"` -- Buffer derives its `dueAt` from the
+channel's own posting schedule rather than storing an exact pinned time.
+Sending a bare `dueAt` to `editPost` on such a post returns
+`PostActionSuccess` and silently changes nothing: the mutation succeeds,
+the response looks correct, and the time never moves. That happened for
+real on 2026-08-30 -- ten posts sat scheduled at 20:00 UTC (23:00 Riyadh),
+and repeated attempts to move them all reported success while doing
+nothing.
+
+The fix is `mode: "customScheduled"` alongside `dueAt` -- that is the field
+that actually pins an exact time; `dueAt` alone is not. `bfr schedule`
+sends it on every call, and because a success response is exactly what
+this defect looks like, it never trusts the mutation's own response: it
+always re-reads the post afterward and compares the ACTUAL resulting
+`dueAt` to what was requested (and confirms status is still `scheduled`),
+failing loudly if they don't match rather than reporting success.
+
+`bfr schedule` also uses different field combinations depending on the
+post's starting status, both found by live trial against the real API:
+moving a *draft* to scheduled additionally requires an explicit
+`schedulingType: "automatic"` and `saveToDraft: false`, or the post
+silently stays a draft despite a success response; retiming an
+already-*scheduled* post needs `mode: customScheduled` alone -- adding
+`schedulingType` or `saveToDraft` there is not part of the verified working
+mutation.
 
 ## Example
 
