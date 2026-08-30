@@ -67,6 +67,9 @@ func cmdShow(postID string, full bool) {
 	}
 	fmt.Printf("id:      %s\n", post.ID)
 	fmt.Printf("status:  %s\n", post.Status)
+	if post.DueAt != "" {
+		fmt.Printf("dueAt:   %s\n", post.DueAt)
+	}
 	fmt.Printf("channel: %s (%s)\n", post.Channel.Name, post.Channel.Service)
 	if full {
 		fmt.Printf("text:    %s\n", post.Text)
@@ -104,7 +107,7 @@ func cmdList(channelArg string) {
 		if len(it.Assets) > 0 {
 			imageFlag = "image=yes"
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", it.ID, it.Status, it.Channel.Name, truncate(it.Text, 50), imageFlag)
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\n", it.ID, it.CreatedAt, it.Status, it.Channel.Name, truncate(it.Text, 50), imageFlag)
 	}
 }
 
@@ -279,6 +282,9 @@ func cmdDraft(channelArg, file string) {
 func handleScheduleResult(dueAt string, result bufferclient.PostResult, resp []byte) {
 	switch result.Typename {
 	case "PostActionSuccess":
+		if result.Status != "scheduled" {
+			blocked("post %s came back status '%s', not 'scheduled' -- editPost returned success but did not actually apply the schedule. Response:\n%s", result.PostID, result.Status, resp)
+		}
 		fmt.Printf("SCHEDULED for %s: post id=%s status=%s\n", dueAt, result.PostID, result.Status)
 	case "":
 		blockedResponse("unexpected response", resp)
@@ -291,11 +297,20 @@ func handleScheduleResult(dueAt string, result bufferclient.PostResult, resp []b
 	}
 }
 
-// cmdSchedule creates a post on the channel with mode: customScheduled and
-// dueAt set to the given ISO 8601 datetime -- a real future-scheduled post,
-// distinct from addToQueue and from saveToDraft. The datetime is validated
-// locally (parses as RFC3339, is in the future) before any network call.
-func cmdSchedule(channelArg, file, datetime string) {
+// cmdSchedule gives an EXISTING draft a future scheduled date via editPost,
+// setting only mode/schedulingType/dueAt -- never creates a new post, and
+// never touches the draft's text, assets, or channel. Refuses anything that
+// is not currently a draft (queued or already-scheduled posts are not safe
+// to reschedule here), and refuses a past or malformed datetime, before any
+// network call. This replaces the earlier file-based signature
+// (bfr schedule <channel> <file.md> <datetime>, which created a NEW post)
+// per EV, 2026-08-29: scheduling an EV-approved draft must never mean
+// re-uploading it -- that file-based path had never been used, so nothing
+// depends on the old signature.
+func cmdSchedule(postID, datetime string) {
+	if strings.TrimSpace(postID) == "" {
+		blocked("post id is required")
+	}
 	dueAt, err := time.Parse(time.RFC3339, datetime)
 	if err != nil {
 		blocked("invalid datetime %q, expected ISO 8601 (RFC3339), e.g. 2026-09-01T14:00:00Z: %s", datetime, err)
@@ -303,22 +318,36 @@ func cmdSchedule(channelArg, file, datetime string) {
 	if !dueAt.After(time.Now()) {
 		blocked("datetime %q is not in the future", datetime)
 	}
-	channel, err := resolveChannel(channelArg)
-	if err != nil {
-		blocked("%s", err)
-	}
-	text, err := readBody(file)
-	if err != nil {
-		blocked("%s", err)
-	}
+
 	c := newClient()
-	result, resp, err := c.CreatePost(bufferclient.PostInput{
-		Text: text, ChannelID: channel, SchedulingType: "automatic", Mode: "customScheduled", DueAt: dueAt.UTC().Format(time.RFC3339),
+	before, resp, err := c.Get(postID)
+	if err != nil {
+		blockedResponse(err.Error(), resp)
+	}
+	if before.Status != "draft" {
+		blocked("post %s has status '%s', not 'draft' -- schedule refuses to touch anything that is not currently a draft.", postID, before.Status)
+	}
+
+	mode := "customScheduled"
+	schedulingType := "automatic"
+	saveToDraft := false
+	dueAtStr := dueAt.UTC().Format(time.RFC3339)
+	// editPost has two undocumented requirements, found by live introspection
+	// and trial (CMO-2424): (1) InvalidInputError "Post must have either text
+	// or media" fires unless text is present in the submitted input, even
+	// though the post already has both stored -- echoing back the unchanged
+	// text (read via the preflight Get above) satisfies it without altering
+	// content; (2) omitting saveToDraft leaves status silently unchanged at
+	// "draft" (PostActionSuccess, no error, but nothing actually scheduled)
+	// -- saveToDraft: false must be sent explicitly to move a draft to
+	// "scheduled".
+	result, resp, err := c.EditPost(bufferclient.EditPostInput{
+		ID: postID, Text: &before.Text, Mode: &mode, SchedulingType: &schedulingType, DueAt: &dueAtStr, SaveToDraft: &saveToDraft,
 	})
 	if err != nil {
 		blockedResponse(err.Error(), resp)
 	}
-	handleScheduleResult(dueAt.UTC().Format(time.RFC3339), result, resp)
+	handleScheduleResult(dueAtStr, result, resp)
 }
 
 // cmdAttachImage attaches an image to an EXISTING post/draft via the

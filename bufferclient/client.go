@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -177,11 +178,18 @@ func (c *Client) CreatePost(input PostInput) (PostResult, []byte, error) {
 // only wants to attach an asset (the attach-image verb's whole purpose)
 // sends nothing else: no text, no mode, no schedulingType. editPost is the
 // sibling mutation to createPost that changes an EXISTING post/draft rather
-// than creating a new one.
+// than creating a new one. Mode/SchedulingType/DueAt exist on Buffer's real
+// EditPostInput (confirmed via __type introspection) alongside Text --
+// setting only those three, on an existing id, is what lets schedule give a
+// draft a date without touching its text, assets, or channel.
 type EditPostInput struct {
-	ID     string      `json:"id"`
-	Text   *string     `json:"text,omitempty"`
-	Assets interface{} `json:"assets,omitempty"`
+	ID             string      `json:"id"`
+	Text           *string     `json:"text,omitempty"`
+	Assets         interface{} `json:"assets,omitempty"`
+	Mode           *string     `json:"mode,omitempty"`
+	SchedulingType *string     `json:"schedulingType,omitempty"`
+	DueAt          *string     `json:"dueAt,omitempty"`
+	SaveToDraft    *bool       `json:"saveToDraft,omitempty"`
 }
 
 const editPostQuery = `mutation($input: EditPostInput!) { editPost(input: $input) { __typename ... on PostActionSuccess { post { id status } } ... on NotFoundError { message } ... on UnauthorizedError { message } ... on UnexpectedError { message } ... on RestProxyError { code message link } ... on LimitReachedError { message } ... on InvalidInputError { message } } }`
@@ -273,6 +281,7 @@ type Asset struct {
 type PostDetail struct {
 	ID      string `json:"id"`
 	Status  string `json:"status"`
+	DueAt   string `json:"dueAt"`
 	Channel struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
@@ -285,7 +294,7 @@ type PostDetail struct {
 // Get reads a single post/draft back by id. Read-only.
 func (c *Client) Get(postID string) (*PostDetail, []byte, error) {
 	resp, err := c.Raw(
-		`query($id: PostId!) { post(input:{id:$id}) { id status channel { id name service } text assets { mimeType source thumbnail } } }`,
+		`query($id: PostId!) { post(input:{id:$id}) { id status dueAt channel { id name service } text assets { mimeType source thumbnail } } }`,
 		map[string]string{"id": postID},
 	)
 	if err != nil {
@@ -304,10 +313,11 @@ func (c *Client) Get(postID string) (*PostDetail, []byte, error) {
 
 // ListItem is one row from List.
 type ListItem struct {
-	ID      string `json:"id"`
-	Status  string `json:"status"`
-	Text    string `json:"text"`
-	Channel struct {
+	ID        string `json:"id"`
+	Status    string `json:"status"`
+	Text      string `json:"text"`
+	CreatedAt string `json:"createdAt"`
+	Channel   struct {
 		Name    string `json:"name"`
 		Service string `json:"service"`
 	} `json:"channel"`
@@ -317,8 +327,10 @@ type ListItem struct {
 	} `json:"assets"`
 }
 
-// List returns up to 50 draft posts, optionally filtered to one channel id.
-// Read-only.
+// List returns up to 50 draft posts, optionally filtered to one channel id,
+// oldest first by createdAt -- so a caller picking "the ten oldest drafts"
+// can trust list order rather than post id order, which is not guaranteed
+// to be chronological.
 func (c *Client) List(orgID string, channelID string) ([]ListItem, []byte, error) {
 	filter := map[string]interface{}{"status": []string{"draft"}}
 	if channelID != "" {
@@ -331,7 +343,7 @@ func (c *Client) List(orgID string, channelID string) ([]ListItem, []byte, error
 		},
 	}
 	resp, err := c.Raw(
-		`query($input: PostsInput!) { posts(input:$input, first:50) { edges { node { id status text channel { name service } assets { mimeType source } } } } }`,
+		`query($input: PostsInput!) { posts(input:$input, first:50) { edges { node { id status text createdAt channel { name service } assets { mimeType source } } } } }`,
 		vars,
 	)
 	if err != nil {
@@ -353,6 +365,7 @@ func (c *Client) List(orgID string, channelID string) ([]ListItem, []byte, error
 	for _, e := range parsed.Data.Posts.Edges {
 		items = append(items, e.Node)
 	}
+	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt < items[j].CreatedAt })
 	return items, resp, nil
 }
 
