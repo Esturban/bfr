@@ -28,10 +28,15 @@ const usageText = `Usage: bfr <command> [args]
 
   bfr channels                            list channel ids, cache to .bfr-channels.json
   bfr idea   <file.md>                    ideas board, no channel attached -- never posts
-  bfr draft  <channel> <file.md>          draft ON the channel (saveToDraft) -- never posts
-  bfr schedule <post-id> <ISO8601-datetime>   give an EXISTING draft a future date, or retime an
-                                           already-scheduled post (customScheduled) -- never creates
-                                           a new post; confirms the change by re-reading it back
+  bfr draft  <channel> <file.md> [--first-comment "<text>"]   draft ON the channel (saveToDraft)
+                                           -- never posts. --first-comment is LinkedIn-only (errors
+                                           on any other channel service)
+  bfr schedule <post-id> <ISO8601-datetime> [--first-comment "<text>"]   give an EXISTING draft a
+                                           future date, or retime an already-scheduled post
+                                           (customScheduled) -- never creates a new post; confirms
+                                           the change by re-reading it back. --first-comment is
+                                           LinkedIn-only; omitting it preserves whatever first
+                                           comment the post already carries
   bfr post   <channel> <file.md>          PUBLISHES LIVE -- queues to the channel, will post
   bfr thread <channel> <file.md>          PUBLISHES LIVE -- '---' blocks become a thread, will post
   bfr image  <channel> <file.md> <path>   PUBLISHES LIVE -- drive-upload, attach, queue, will post
@@ -60,6 +65,25 @@ func failUsage() {
 	os.Exit(1)
 }
 
+// extractFlag scans args for "<name> <value>" and returns the remaining
+// positional args with that pair removed, plus the value (empty string if
+// the flag was not present). Same "special-case the one optional flag"
+// approach bfr show already uses for --full, rather than pulling in a
+// flag-parsing package for a single optional value that can appear anywhere
+// among a command's positional args.
+func extractFlag(args []string, name string) (rest []string, value string) {
+	rest = make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		if args[i] == name && i+1 < len(args) {
+			value = args[i+1]
+			i++
+			continue
+		}
+		rest = append(rest, args[i])
+	}
+	return rest, value
+}
+
 func main() {
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -78,15 +102,17 @@ func main() {
 		}
 		cmdIdea(rest[0])
 	case "draft":
+		rest, firstComment := extractFlag(rest, "--first-comment")
 		if len(rest) < 2 {
 			failUsage()
 		}
-		cmdDraft(rest[0], rest[1])
+		cmdDraft(rest[0], rest[1], firstComment)
 	case "schedule":
+		rest, firstComment := extractFlag(rest, "--first-comment")
 		if len(rest) < 2 {
 			failUsage()
 		}
-		cmdSchedule(rest[0], rest[1])
+		cmdSchedule(rest[0], rest[1], firstComment)
 	case "post":
 		if len(rest) < 2 {
 			failUsage()

@@ -126,6 +126,24 @@ func resolveChannel(arg string) (string, error) {
 	return "", fmt.Errorf("channel '%s' not in cache. Run 'bfr channels' to refresh", arg)
 }
 
+// channelServiceByID looks up a channel's service (e.g. "linkedin",
+// "twitter") from the cache by id. Same cache resolveChannel already reads
+// -- no fresh API call. Used to gate --first-comment to LinkedIn channels
+// only (CMO-2596): the flag must error, not silently no-op, on any other
+// service.
+func channelServiceByID(channelID string) (string, error) {
+	c, err := readCache()
+	if err != nil {
+		return "", err
+	}
+	for _, ch := range c.Channels {
+		if ch.ID == channelID {
+			return ch.Service, nil
+		}
+	}
+	return "", fmt.Errorf("channel id '%s' not in cache. Run 'bfr channels' to refresh", channelID)
+}
+
 // orgID returns the cached organizationId if a cache file exists, otherwise
 // resolves it live from the API (without caching it standalone -- org is
 // only persisted as part of a full 'bfr channels' write, same as bash).
