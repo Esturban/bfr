@@ -114,6 +114,13 @@ func cmdShow(postID string, full bool) {
 	} else {
 		fmt.Printf("text:    %s\n", truncate(post.Text, 100))
 	}
+	if post.Metadata != nil && post.Metadata.FirstComment != "" {
+		if full {
+			fmt.Printf("firstComment: %s\n", post.Metadata.FirstComment)
+		} else {
+			fmt.Printf("firstComment: %s\n", truncate(post.Metadata.FirstComment, 100))
+		}
+	}
 	if len(post.Assets) == 0 {
 		fmt.Println("assets:  none attached")
 		return
@@ -308,7 +315,27 @@ func handleDraftResult(channelArg string, result bufferclient.PostResult, resp [
 	}
 }
 
-func cmdDraft(channelArg, file string) {
+// linkedInFirstCommentMetadata validates and builds the metadata payload
+// for --first-comment (CMO-2596). firstComment == "" is the common
+// omitted-flag case and returns (nil, nil) -- callers must not call this at
+// all if they want existing behavior fully unchanged, but doing so anyway is
+// harmless. Must not silently swallow a non-empty firstComment on a
+// non-LinkedIn channel -- that returns a clear error instead.
+func linkedInFirstCommentMetadata(channelID, firstComment string) (interface{}, error) {
+	if firstComment == "" {
+		return nil, nil
+	}
+	service, err := channelServiceByID(channelID)
+	if err != nil {
+		return nil, err
+	}
+	if service != "linkedin" {
+		return nil, fmt.Errorf("--first-comment is only supported on LinkedIn channels, but this channel's service is '%s'", service)
+	}
+	return bufferclient.LinkedInFirstComment(firstComment), nil
+}
+
+func cmdDraft(channelArg, file, firstComment string) {
 	channel, err := resolveChannel(channelArg)
 	if err != nil {
 		blocked("%s", err)
@@ -317,9 +344,13 @@ func cmdDraft(channelArg, file string) {
 	if err != nil {
 		blocked("%s", err)
 	}
+	metadata, err := linkedInFirstCommentMetadata(channel, firstComment)
+	if err != nil {
+		blocked("%s", err)
+	}
 	c := newClient()
 	result, resp, err := c.CreatePost(bufferclient.PostInput{
-		Text: text, ChannelID: channel, SchedulingType: "automatic", Mode: "addToQueue", SaveToDraft: true,
+		Text: text, ChannelID: channel, SchedulingType: "automatic", Mode: "addToQueue", SaveToDraft: true, Metadata: metadata,
 	})
 	if err != nil {
 		blockedResponse(err.Error(), resp)
@@ -393,8 +424,11 @@ func handleScheduleResult(c *bufferclient.Client, postID, requestedDueAt string,
 // here. Refuses a past or malformed datetime before any network call.
 // editPost REPLACES the post, so text and any attached assets are always
 // read back via the preflight Get and echoed unchanged, so a scheduled post
-// carrying an image never loses it to this call.
-func cmdSchedule(postID, datetime string) {
+// carrying an image never loses it to this call. CMO-2596: an existing
+// LinkedIn first comment gets the same echo-back treatment -- retiming a
+// post that already carries one must not silently wipe it just because
+// --first-comment was not passed on this particular call.
+func cmdSchedule(postID, datetime, firstComment string) {
 	if strings.TrimSpace(postID) == "" {
 		blocked("post id is required")
 	}
@@ -431,7 +465,19 @@ func cmdSchedule(postID, datetime string) {
 		assets = list
 	}
 
-	input := bufferclient.EditPostInput{ID: postID, Text: &before.Text, Mode: &mode, DueAt: &dueAtStr, Assets: assets}
+	effectiveFirstComment := firstComment
+	if effectiveFirstComment == "" && before.Metadata != nil {
+		effectiveFirstComment = before.Metadata.FirstComment
+	}
+	var metadata interface{}
+	if effectiveFirstComment != "" {
+		if before.Channel.Service != "linkedin" {
+			blocked("--first-comment is only supported on LinkedIn channels, but post %s is on a '%s' channel", postID, before.Channel.Service)
+		}
+		metadata = bufferclient.LinkedInFirstComment(effectiveFirstComment)
+	}
+
+	input := bufferclient.EditPostInput{ID: postID, Text: &before.Text, Mode: &mode, DueAt: &dueAtStr, Assets: assets, Metadata: metadata}
 	if before.Status == "draft" {
 		schedulingType := "automatic"
 		saveToDraft := false

@@ -190,6 +190,21 @@ type EditPostInput struct {
 	SchedulingType *string     `json:"schedulingType,omitempty"`
 	DueAt          *string     `json:"dueAt,omitempty"`
 	SaveToDraft    *bool       `json:"saveToDraft,omitempty"`
+	Metadata       interface{} `json:"metadata,omitempty"`
+}
+
+// LinkedInFirstComment builds the metadata payload that sets a LinkedIn
+// post's first comment via CreatePost/EditPost's Metadata field:
+// { linkedin: { firstComment: text } }. Confirmed live via __type
+// introspection against api.buffer.com (CMO-2596):
+// LinkedInPostMetadataInput carries a firstComment string field alongside
+// annotations and linkAttachment, and both CreatePostInput and
+// EditPostInput accept metadata: PostInputMetaData with a linkedin field of
+// that shape. This is only meaningful when the target channel's service is
+// "linkedin" -- callers are responsible for that check, since Buffer's
+// schema does not itself refuse the field for a non-LinkedIn channel.
+func LinkedInFirstComment(text string) interface{} {
+	return map[string]interface{}{"linkedin": map[string]interface{}{"firstComment": text}}
 }
 
 const editPostQuery = `mutation($input: EditPostInput!) { editPost(input: $input) { __typename ... on PostActionSuccess { post { id status } } ... on NotFoundError { message } ... on UnauthorizedError { message } ... on UnexpectedError { message } ... on RestProxyError { code message link } ... on LimitReachedError { message } ... on InvalidInputError { message } } }`
@@ -277,6 +292,18 @@ type Asset struct {
 	Thumbnail string `json:"thumbnail"`
 }
 
+// PostMetadata is the platform-specific data a post carries back on read.
+// Buffer's Post.metadata field is a union over every platform's metadata
+// type (LinkedInPostMetadata, TwitterPostMetadata, ...); only the LinkedIn
+// branch is requested today, since firstComment (CMO-2596) is the only
+// metadata this client currently needs to read back. Typename is empty for
+// any post whose metadata is not LinkedIn's (or has none), in which case
+// FirstComment is also empty.
+type PostMetadata struct {
+	Typename     string `json:"__typename"`
+	FirstComment string `json:"firstComment"`
+}
+
 // PostDetail is the read shape returned by Get (bfr show).
 type PostDetail struct {
 	ID             string `json:"id"`
@@ -288,14 +315,15 @@ type PostDetail struct {
 		Name    string `json:"name"`
 		Service string `json:"service"`
 	} `json:"channel"`
-	Text   string  `json:"text"`
-	Assets []Asset `json:"assets"`
+	Text     string        `json:"text"`
+	Assets   []Asset       `json:"assets"`
+	Metadata *PostMetadata `json:"metadata"`
 }
 
 // Get reads a single post/draft back by id. Read-only.
 func (c *Client) Get(postID string) (*PostDetail, []byte, error) {
 	resp, err := c.Raw(
-		`query($id: PostId!) { post(input:{id:$id}) { id status dueAt schedulingType channel { id name service } text assets { mimeType source thumbnail } } }`,
+		`query($id: PostId!) { post(input:{id:$id}) { id status dueAt schedulingType channel { id name service } text assets { mimeType source thumbnail } metadata { __typename ... on LinkedInPostMetadata { firstComment } } } }`,
 		map[string]string{"id": postID},
 	)
 	if err != nil {
