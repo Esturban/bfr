@@ -129,7 +129,7 @@ func resolveChannel(arg string) (string, error) {
 // channelServiceByID looks up a channel's service (e.g. "linkedin",
 // "twitter") from the cache by id. Same cache resolveChannel already reads
 // -- no fresh API call. Used to gate --first-comment to LinkedIn channels
-// only (CMO-2596): the flag must error, not silently no-op, on any other
+// only: the flag must error, not silently no-op, on any other
 // service.
 func channelServiceByID(channelID string) (string, error) {
 	c, err := readCache()

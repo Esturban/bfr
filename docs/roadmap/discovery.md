@@ -1,4 +1,4 @@
-# API surface discovery (CMO-2405)
+# API surface discovery
 
 What Buffer's GraphQL API exposes beyond what `bfr` calls today, and which
 gaps are worth closing before or after the open-source release. Ground
@@ -10,8 +10,8 @@ truth for both sides was pulled fresh, not carried over from prior tickets:
   hardcoded to `"automatic"` everywhere. `post`/`thread`/`image`/`draft`/
   `draft-image` do send `"automatic"` (queue placement), but `schedule`
   sends `mode: "customScheduled"` with no `schedulingType` at all when
-  retiming an already-scheduled post -- that distinction is CMO-2558's
-  actual fix and is load-bearing, not an oversight.
+  retiming an already-scheduled post -- that distinction is the
+  actual fix for a real retiming defect and is load-bearing, not an oversight.
 - **Buffer's full surface**: read live via GraphQL introspection
   (`__schema`, `__type` on `Query` and `Mutation`) against
   `api.buffer.com`, using the repo's own `BUFFER_API_KEY`. Introspection
@@ -34,7 +34,7 @@ this writing. The real verb list is: `channels`, `idea`, `draft`,
 | `createIdea` | Yes | Yes (kept) | Core write path behind `idea`. |
 | `account { organizations }`, `channels` | Yes | Yes (kept) | Backs `channels` and the local channel cache every other verb resolves against. |
 | `post` / `posts` (read) | Yes | Yes (kept) | Backs `show` and `list`. |
-| `movePostInQueue` | No | No | Shuffles a post's implicit queue position without changing its content or a concrete time. `bfr schedule` already exists specifically to replace "trust Buffer's queue ordering" with an explicit `dueAt` plus a re-read confirmation (CMO-2558 was a real incident caused by trusting implicit queue behavior). Adding a verb that leans back on implicit ordering works against a fix already shipped. |
+| `movePostInQueue` | No | No | Shuffles a post's implicit queue position without changing its content or a concrete time. `bfr schedule` already exists specifically to replace "trust Buffer's queue ordering" with an explicit `dueAt` plus a re-read confirmation (a real incident was caused by trusting implicit queue behavior). Adding a verb that leans back on implicit ordering works against a fix already shipped. |
 | `aggregatedPostMetrics` (channel/date-range rollup) | No | **Yes** | Read-only analytics rollup (impressions, reactions, comments, engagement rate on LinkedIn). AGENTS.md's `post-live` signal schema already wants `engagement_24h` figures, and the weekly runway process wants a performance rollup -- both are currently hand-checked in Buffer's own UI or estimated. This closes a real, already-documented gap with a pure read. |
 | `post.metrics` (per-post analytics) | No | **Yes** | Same justification at single-post granularity: lets `bfr show` report real engagement instead of nothing, feeding `wiki/tracking/performance-log.md` without a browser trip. |
 | `ideas` / `ideaGroups` (read back) | No | **Yes** | `bfr idea` is the only write verb with no matching read verb -- an idea created through the CLI is invisible again until someone opens Buffer's UI. Every other write verb (`draft`, `post`, `schedule`, ...) has `show`/`list` as its mirror; ideas don't. Small, symmetric, read-only. |
@@ -44,7 +44,7 @@ this writing. The real verb list is: `channels`, `idea`, `draft`,
 | `channel` (single-channel read) | No | No | `channels` plus the local cache already answers this at negligible cost; a second verb for one row out of an already-cached list is surface area without a real use case. |
 | `post.tags` | No | No | No mutation exists to create or assign tags via this API at all -- tags are managed in Buffer's own UI. Reading a field the CLI can't write is a half-feature with no operator workflow behind it. |
 | `post.notes` | No | No | Notes are a team-collaboration feature (comments on a post between teammates). This is a solo-operator tool; there is no second person to leave a note for. |
-| `post.allowedActions` | No | No | Interesting for hardening the existing hand-written status gates (`update`/`schedule` already refuse unsafe states explicitly), but the current explicit checks were deliberately added post-incident (CMO-2413, CMO-2558) and are easy to audit in Go. Swapping them for a server-provided capability list trades a reviewable local check for an opaque one, for no user-visible gain today. |
+| `post.allowedActions` | No | No | Interesting for hardening the existing hand-written status gates (`update`/`schedule` already refuse unsafe states explicitly), but the current explicit checks were deliberately added post-incident and are easy to audit in Go. Swapping them for a server-provided capability list trades a reviewable local check for an opaque one, for no user-visible gain today. |
 
 ## Recommended for Phase 2 (GitHub issues)
 
@@ -69,7 +69,7 @@ this writing. The real verb list is: `channels`, `idea`, `draft`,
 
 Everything else in the table above is a deliberate **no**, not an
 oversight -- most of it either contradicts a fix already shipped
-(`movePostInQueue` vs. CMO-2558), duplicates a source of truth this repo
+(`movePostInQueue` vs. the scheduled-retime fix), duplicates a source of truth this repo
 already owns (templates vs. markdown files), or has no operator behind it
 in a one-person tool (tags, notes). Keeping the verb surface small and
 honest is the point; a table that recommended all of it would be a

@@ -27,8 +27,8 @@ func blockedResponse(msg string, resp []byte) {
 	os.Exit(1)
 }
 
-// riyadhLoc and newYorkLoc back the three-zone due-time display added for
-// CMO-2558: ten posts sat at 20:00 UTC (23:00 Riyadh) with nothing in the
+// riyadhLoc and newYorkLoc back the three-zone due-time display added after
+// ten posts once sat at 20:00 UTC (23:00 Riyadh) with nothing in the
 // tool surfacing that in a zone a human actually reads in. Falls back to a
 // fixed offset if the build's tzdata is unavailable rather than silently
 // printing UTC under a Riyadh/New York label -- that substitution would be
@@ -47,7 +47,7 @@ func mustLoadLocation(name string, fallbackOffsetSeconds int) *time.Location {
 }
 
 // parseDueAt parses a dueAt string as the API actually returns it, which
-// carries fractional seconds (observed live, CMO-2558: dueAt comes back as
+// carries fractional seconds (observed live: dueAt comes back as
 // e.g. "2026-09-14T12:00:00.000Z"). time.RFC3339Nano's fractional-second
 // placeholder is optional-width, so it also parses a dueAt with none.
 func parseDueAt(s string) (time.Time, error) {
@@ -130,8 +130,8 @@ func cmdShow(postID string, full bool) {
 	}
 }
 
-// cmdList shows drafts and scheduled posts together -- CMO-2558: ten posts
-// sat scheduled at 20:00 UTC (23:00 Riyadh) with nothing showing it, because
+// cmdList shows drafts and scheduled posts together -- ten posts once sat
+// scheduled at 20:00 UTC (23:00 Riyadh) with nothing showing it, because
 // this used to query drafts only. A scheduled post's due time prints in
 // UTC, Riyadh and New York together so a clustered/wrong time is visible at
 // a glance instead of needing a separate lookup per zone.
@@ -316,7 +316,7 @@ func handleDraftResult(channelArg string, result bufferclient.PostResult, resp [
 }
 
 // linkedInFirstCommentMetadata validates and builds the metadata payload
-// for --first-comment (CMO-2596). firstComment == "" is the common
+// for --first-comment. firstComment == "" is the common
 // omitted-flag case and returns (nil, nil) -- callers must not call this at
 // all if they want existing behavior fully unchanged, but doing so anyway is
 // harmless. Must not silently swallow a non-empty firstComment on a
@@ -362,10 +362,10 @@ func cmdDraft(channelArg, file, firstComment string) {
 // handleDraftResult: schedule must never be mistaken for either -- its
 // success line says SCHEDULED, never QUEUED or DRAFT.
 //
-// CMO-2558: editPost returning PostActionSuccess is NOT proof the time
-// actually changed -- an "automatic" scheduling-type post accepted a new
-// dueAt and silently kept its old one, ten times in a row, the night this
-// ticket was filed. So a bare "success" typename is never trusted here:
+// editPost returning PostActionSuccess is NOT proof the time actually
+// changed -- an "automatic" scheduling-type post accepted a new dueAt and
+// silently kept its old one, ten times in a row, the night this was found.
+// So a bare "success" typename is never trusted here:
 // this re-reads the post via Get and compares the ACTUAL resulting dueAt to
 // what was requested (5s tolerance for API-side sub-second rounding) and
 // confirms status is still "scheduled". Either check failing blocks loudly
@@ -387,7 +387,7 @@ func handleScheduleResult(c *bufferclient.Client, postID, requestedDueAt string,
 		}
 		if diff := got.Sub(wanted); diff < -5*time.Second || diff > 5*time.Second {
 			utcStr, riyadhStr, nyStr := formatDueAtTriple(after.DueAt)
-			blocked("editPost for post %s returned success, but the re-read shows dueAt still %s / %s Riyadh / %s New York -- the requested time did NOT take effect. This is the CMO-2558 silent-no-op defect: a success response that changes nothing.", postID, utcStr, riyadhStr, nyStr)
+			blocked("editPost for post %s returned success, but the re-read shows dueAt still %s / %s Riyadh / %s New York -- the requested time did NOT take effect. This is a known silent-no-op defect: a success response that changes nothing.", postID, utcStr, riyadhStr, nyStr)
 		}
 		utcStr, riyadhStr, nyStr := formatDueAtTriple(after.DueAt)
 		fmt.Printf("SCHEDULED and CONFIRMED by re-read: post id=%s now due %s / %s Riyadh / %s New York\n", postID, utcStr, riyadhStr, nyStr)
@@ -406,16 +406,16 @@ func handleScheduleResult(c *bufferclient.Client, postID, requestedDueAt string,
 // creating a new post. It accepts two starting states:
 //
 //   - draft -> scheduled (the original behavior, ffdc289): the two
-//     undocumented requirements found by live trial (CMO-2424) still apply --
+//     undocumented requirements found by live trial still apply --
 //     schedulingType:"automatic" and an explicit saveToDraft:false are both
 //     required alongside mode:customScheduled, or the post silently stays a
 //     draft despite a PostActionSuccess response.
-//   - scheduled -> a new dueAt ("retime"): CMO-2558's actual defect. Every
+//   - scheduled -> a new dueAt ("retime"): the actual defect found here. Every
 //     post created through the normal queue path carries schedulingType
 //     "automatic", meaning Buffer derives dueAt from the channel's own
 //     posting schedule -- sending a bare dueAt to editPost on such a post
 //     returns PostActionSuccess and silently changes nothing. Verified live
-//     against the real account, 2026-08-30 (CMO-2558): the field that
+//     against the real account, 2026-08-30: the field that
 //     actually pins the time is mode:customScheduled alone -- adding
 //     schedulingType or saveToDraft to THIS call is not part of the proven
 //     working mutation, so they are only sent for the draft path above.
@@ -424,7 +424,7 @@ func handleScheduleResult(c *bufferclient.Client, postID, requestedDueAt string,
 // here. Refuses a past or malformed datetime before any network call.
 // editPost REPLACES the post, so text and any attached assets are always
 // read back via the preflight Get and echoed unchanged, so a scheduled post
-// carrying an image never loses it to this call. CMO-2596: an existing
+// carrying an image never loses it to this call. An existing
 // LinkedIn first comment gets the same echo-back treatment -- retiming a
 // post that already carries one must not silently wipe it just because
 // --first-comment was not passed on this particular call.
@@ -533,7 +533,7 @@ func cmdAttachImage(postID, url string) {
 // to run unless a preflight Get shows status "draft" -- queued or
 // published posts are not safe to edit in place. This verb existed on an
 // earlier branch (a071493) that was never actually merged into dev; this
-// re-adds it after CMO-2413 found the gap.
+// re-adds it after that gap was found.
 func cmdUpdate(postID, file string) {
 	if strings.TrimSpace(postID) == "" {
 		blocked("post id is required")

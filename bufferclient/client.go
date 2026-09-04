@@ -196,7 +196,7 @@ type EditPostInput struct {
 // LinkedInFirstComment builds the metadata payload that sets a LinkedIn
 // post's first comment via CreatePost/EditPost's Metadata field:
 // { linkedin: { firstComment: text } }. Confirmed live via __type
-// introspection against api.buffer.com (CMO-2596):
+// introspection against api.buffer.com:
 // LinkedInPostMetadataInput carries a firstComment string field alongside
 // annotations and linkAttachment, and both CreatePostInput and
 // EditPostInput accept metadata: PostInputMetaData with a linkedin field of
@@ -295,7 +295,7 @@ type Asset struct {
 // PostMetadata is the platform-specific data a post carries back on read.
 // Buffer's Post.metadata field is a union over every platform's metadata
 // type (LinkedInPostMetadata, TwitterPostMetadata, ...); only the LinkedIn
-// branch is requested today, since firstComment (CMO-2596) is the only
+// branch is requested today, since firstComment is the only
 // metadata this client currently needs to read back. Typename is empty for
 // any post whose metadata is not LinkedIn's (or has none), in which case
 // FirstComment is also empty.
@@ -341,8 +341,8 @@ func (c *Client) Get(postID string) (*PostDetail, []byte, error) {
 }
 
 // ListItem is one row from List. DueAt and SchedulingType are only
-// populated for scheduled posts -- a draft has no due time yet. CMO-2558:
-// ten posts sat scheduled at 20:00 UTC (23:00 Riyadh) with no way to see
+// populated for scheduled posts -- a draft has no due time yet. Ten posts
+// once sat scheduled at 20:00 UTC (23:00 Riyadh) with no way to see
 // them, because List only ever queried status:[draft]. It now also queries
 // status:[scheduled] so the same command surfaces both.
 type ListItem struct {
