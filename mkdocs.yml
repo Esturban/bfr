@@ -35,3 +35,5 @@ nav:
   - Auth: auth.md
   - Commands: commands.md
   - Library usage: library.md
+  - Roadmap:
+      - API surface discovery: roadmap/discovery.md
