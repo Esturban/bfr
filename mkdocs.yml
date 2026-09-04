@@ -1,0 +1,37 @@
+site_name: bfr
+site_description: A Go command-line client for Buffer's GraphQL API
+repo_url: https://github.com/Esturban/bfr
+repo_name: Esturban/bfr
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: black
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+
+markdown_extensions:
+  - fenced_code
+  - tables
+  - admonition
+  - pymdownx.superfences
+
+nav:
+  - Overview: index.md
+  - Install: install.md
+  - Auth: auth.md
+  - Commands: commands.md
+  - Library usage: library.md

@@ -2,6 +2,8 @@
 state/
 .env
 dist/
+site/
+.venv-docs/
 
 # bfr-cli: regenerable channel cache, real ids for whichever account ran it
 .bfr-channels.json

@@ -1,0 +1,50 @@
+name: docs
+
+# Manual trigger only, deliberately, not on every push to main. This repo
+# is private today; GitHub Pages refuses private repos on the current
+# plan (confirmed via the Pages API). Running this on every push
+# while Pages is unavailable would just paint every commit red for a
+# failure nobody can fix from inside this workflow. Once Pages is enabled
+# (a paid plan, or the repo going public), switch the trigger back to
+# push: { branches: [main] } and this becomes a real auto-deploy.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - run: pip install mkdocs-material
+
+      - run: mkdocs build --strict
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
