@@ -9,6 +9,29 @@ terminal. The GraphQL client lives in its own package, `bufferclient`, which
 carries no project-specific defaults, so it can be imported by other Go
 tools without pulling this CLI along.
 
+## ⚠ Which verbs publish live -- read this before wiring up an agent
+
+`bfr` is built to be driven by an agent, not just a human at a terminal.
+That means the single fact that matters most is which commands are safe to
+run unattended and which ones put text or an image in front of a real
+audience. Full behavior for every verb is in the [Commands](#commands)
+table below -- this is just the split that must never get lost in a skim.
+
+**Never publishes (safe to script/automate):**
+`channels`, `idea`, `draft`, `draft-image`, `show`, `list`, `version`
+
+**Publishes live to a real audience:**
+`post`, `thread`, `image`
+
+**Mutates an existing post/draft in place (not a new publish, but not a no-op either):**
+`schedule` (retimes), `attach-image` (adds an image), `update` (replaces text)
+
+**Irreversible:**
+`delete`
+
+Both connected channels run an unpaused queue, so there is no "safe" queue
+state for `post`/`thread`/`image` -- calling them **will** post for real.
+
 ## Install
 
 ```sh
