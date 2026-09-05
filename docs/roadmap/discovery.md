@@ -35,7 +35,7 @@ this writing. The real verb list is: `channels`, `idea`, `draft`,
 | `account { organizations }`, `channels` | Yes | Yes (kept) | Backs `channels` and the local channel cache every other verb resolves against. |
 | `post` / `posts` (read) | Yes | Yes (kept) | Backs `show` and `list`. |
 | `movePostInQueue` | No | No | Shuffles a post's implicit queue position without changing its content or a concrete time. `bfr schedule` already exists specifically to replace "trust Buffer's queue ordering" with an explicit `dueAt` plus a re-read confirmation (a real incident was caused by trusting implicit queue behavior). Adding a verb that leans back on implicit ordering works against a fix already shipped. |
-| `aggregatedPostMetrics` (channel/date-range rollup) | No | **Yes** | Read-only analytics rollup (impressions, reactions, comments, engagement rate on LinkedIn). Downstream tooling that logs post performance already wants `engagement_24h` figures, and the weekly runway process wants a performance rollup. Both are currently hand-checked in Buffer's own UI or estimated. This closes a real, already-documented gap with a pure read. |
+| `aggregatedPostMetrics` (channel/date-range rollup) | No | **Yes** | Read-only analytics rollup (impressions, reactions, comments, engagement rate on LinkedIn). Downstream tooling that logs post performance already wants `engagement_24h` figures, and a weekly review wants a performance rollup. Both are currently hand-checked in Buffer's own UI or estimated. This closes a real, already-documented gap with a pure read. |
 | `post.metrics` (per-post analytics) | No | **Yes** | Same justification at single-post granularity: lets `bfr show` report real engagement instead of nothing, feeding a local performance log without a browser trip. |
 | `ideas` / `ideaGroups` (read back) | No | **Yes** | `bfr idea` is the only write verb with no matching read verb: an idea created through the CLI is invisible again until someone opens Buffer's UI. Every other write verb (`draft`, `post`, `schedule`, ...) has `show`/`list` as its mirror; ideas don't. Small, symmetric, read-only. |
 | `createContentItem` / `*ContentItemDraft` / `promoteContentItemDraftToPosts` / `updateContentItem` / `deleteContentItem` | No | No (for now) | Buffer's own schema marks this whole family "early preview, can change without a deprecation period." It's a real capability (one item, many channel-specific variants, in one call) but building a CLI verb on an API Buffer itself won't commit to yet is the wrong trade for a small, stable tool. Revisit once Buffer marks it stable. Don't build against a moving target now. |
@@ -58,7 +58,7 @@ this writing. The real verb list is: `channels`, `idea`, `draft`,
 2. **`bfr metrics-summary <channel> [--since DATE]`**: read
    `aggregatedPostMetrics` for a channel/date-range rollup. *Outcome:*
    one command answers "how did this month's LinkedIn posts do" for the
-   weekly runway review, instead of tallying the performance log by hand.
+   weekly review, instead of tallying the performance log by hand.
    *Why it made the cut:* read-only, zero risk to the honest-verb line,
    and replaces a recurring manual rollup that already happens today.
 3. **`bfr ideas`**: read `ideas`/`ideaGroups` back. *Outcome:* an idea
