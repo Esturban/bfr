@@ -18,7 +18,7 @@ bfr channels
 
 ```
 Cached 2 channel(s) to .bfr-channels.json
-64f1a2b3c4d5e6f7a8b9c0d1	valest	linkedin	queuePaused=false
+64f1a2b3c4d5e6f7a8b9c0d1	mychannel	linkedin	queuePaused=false
 64f1a2b3c4d5e6f7a8b9c0d2	general-x	twitter	queuePaused=false
 ```
 
@@ -39,11 +39,11 @@ IDEA CREATED (draft only, not posted): id=64f1a2b3c4d5e6f7a8b9c0d3
 Drafts on a channel (`saveToDraft`). Never posts.
 
 ```sh
-bfr draft valest ./post.md
+bfr draft mychannel ./post.md
 ```
 
 ```
-DRAFT on valest (not queued, not published): post id=64f1a2b3c4d5e6f7a8b9c0d4 status=draft
+DRAFT on mychannel (not queued, not published): post id=64f1a2b3c4d5e6f7a8b9c0d4 status=draft
 ```
 
 ## schedule
@@ -74,7 +74,7 @@ vs. retiming an already-scheduled post) if you are extending this verb.
 **Publishes live.** Queues to the channel; will post.
 
 ```sh
-bfr post valest ./post.md
+bfr post mychannel ./post.md
 ```
 
 ```
@@ -106,7 +106,7 @@ QUEUED: post id=64f1a2b3c4d5e6f7a8b9c0d6 status=queued
 **Publishes live.** Drive upload, attach, queue, in one call.
 
 ```sh
-bfr image valest ./post.md ./cover.png
+bfr image mychannel ./post.md ./cover.png
 ```
 
 ```
@@ -119,12 +119,12 @@ QUEUED: post id=64f1a2b3c4d5e6f7a8b9c0d7 status=queued
 Drafts on the channel with an image attached. Never posts.
 
 ```sh
-bfr draft-image valest ./post.md ./cover.png
+bfr draft-image mychannel ./post.md ./cover.png
 ```
 
 ```
 Image asset URL: https://drive.usercontent.google.com/download?id=...
-DRAFT on valest (not queued, not published): post id=64f1a2b3c4d5e6f7a8b9c0d8 status=draft
+DRAFT on mychannel (not queued, not published): post id=64f1a2b3c4d5e6f7a8b9c0d8 status=draft
 ```
 
 ## attach-image
@@ -170,7 +170,7 @@ bfr show 64f1a2b3c4d5e6f7a8b9c0d4 --full
 id:      64f1a2b3c4d5e6f7a8b9c0d4
 status:  draft
 dueAt:   2026-09-10T14:00:00Z
-channel: valest (linkedin)
+channel: mychannel (linkedin)
 text:    The full, untruncated post body appears here, hashtags and all.
 firstComment: Link in the comments.
 asset:   mimeType=image/png source=https://drive.usercontent.google.com/download?id=...
@@ -183,13 +183,13 @@ given): id, status, channel, due time in UTC/Riyadh/New York, text, and
 whether an image is attached. Read-only.
 
 ```sh
-bfr list valest
+bfr list mychannel
 ```
 
 ```
 id	status	channel	due(UTC)	due(Riyadh)	due(NewYork)	text	image
-64f1a2b3c4d5e6f7a8b9c0d4	draft	valest			The full, untruncated post b...	yes
-64f1a2b3c4d5e6f7a8b9c0d5	scheduled	valest	2026-09-10 14:00 UTC	2026-09-10 17:00 +03	2026-09-10 10:00 EDT	Another draft's text...	no
+64f1a2b3c4d5e6f7a8b9c0d4	draft	mychannel			The full, untruncated post b...	yes
+64f1a2b3c4d5e6f7a8b9c0d5	scheduled	mychannel	2026-09-10 14:00 UTC	2026-09-10 17:00 +03	2026-09-10 10:00 EDT	Another draft's text...	no
 ```
 
 ## delete

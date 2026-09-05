@@ -42,19 +42,19 @@ changelog:
 
 release:
   # This repo is private and has one user today. Draft nothing, prerelease
-  # everything below v1.0.0 -- there is no consumer yet to protect from a
+  # everything below v1.0.0: there is no consumer yet to protect from a
   # half-finished v0 tag.
   prerelease: auto
 
-# Homebrew tap publishing -- CONFIGURED, NOT ACTIVE.
+# Homebrew tap publishing: CONFIGURED, NOT ACTIVE.
 # goreleaser fully deprecated `brews` as of v2.16; `homebrew_casks` is the
 # current mechanism for shipping pre-compiled binaries via Homebrew, cask
 # or not. skip_upload: true is the switch: goreleaser renders the cask file
 # into dist/ locally but never pushes or commits it anywhere, regardless of
 # whether the tap repo exists. github.com/Esturban/homebrew-tap does not
-# exist yet -- creating a new public repo is EV's call, not this pipeline's.
+# exist yet. Creating a new public repo is EV's call, not this pipeline's.
 # To go live: (1) EV creates the public repo github.com/Esturban/homebrew-tap
-# by hand, (2) flip skip_upload to false here. Nothing else changes -- the
+# by hand, (2) flip skip_upload to false here. Nothing else changes: the
 # repository block below already points at it.
 homebrew_casks:
   - name: bfr
