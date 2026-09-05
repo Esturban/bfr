@@ -1,13 +1,10 @@
 name: docs
 
-# Manual trigger only, deliberately, not on every push to main. This repo
-# is private today; GitHub Pages refuses private repos on the current
-# plan (confirmed via the Pages API). Running this on every push
-# while Pages is unavailable would just paint every commit red for a
-# failure nobody can fix from inside this workflow. Once Pages is enabled
-# (a paid plan, or the repo going public), switch the trigger back to
-# push: { branches: [main] } and this becomes a real auto-deploy.
+# Builds the mkdocs-material site and deploys it to GitHub Pages on every
+# push to main, plus manual runs via workflow_dispatch.
 on:
+  push:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:

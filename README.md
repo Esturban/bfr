@@ -34,6 +34,8 @@ state for `post`/`thread`/`image`: calling them **will** post for real.
 
 ## Install
 
+Full documentation: https://esturban.github.io/bfr/
+
 ```sh
 git clone https://github.com/Esturban/bfr.git
 cd bfr
