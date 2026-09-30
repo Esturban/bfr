@@ -48,6 +48,12 @@ const usageText = `Usage: bfr <command> [args]
   bfr show   <post-id> [--full]           read a post/draft back -- status, channel, text, assets
   bfr list   [channel]                    list drafts AND scheduled posts -- id, status, channel, due
                                            time in UTC/Riyadh/New York, text, image attached. Read-only
+  bfr stats  <post-id>                    metrics for one SENT post -- impressions, reach, reactions,
+                                           comments, clicks, engagement rate. A metric Buffer does not
+                                           return prints n/a (clicks is not returned for LinkedIn).
+                                           Read-only, never posts/schedules/deletes
+  bfr stats  --sent [n]                   same columns for the n most recently sent posts (default 10,
+                                           max 50), newest first. Read-only
   bfr delete <post-id>                    PERMANENTLY deletes a post/draft -- irreversible, no undo
   bfr version                             print version, commit and build date
 
@@ -155,6 +161,15 @@ func main() {
 			channelArg = rest[0]
 		}
 		cmdList(channelArg)
+	case "stats":
+		if len(rest) >= 1 && rest[0] == "--sent" {
+			cmdStatsSent(rest[1:])
+			return
+		}
+		if len(rest) < 1 {
+			failUsage()
+		}
+		cmdStats(rest[0])
 	case "delete":
 		if len(rest) < 1 {
 			failUsage()
