@@ -53,7 +53,7 @@ const usageText = `Usage: bfr <command> [args]
                                            return prints n/a (clicks is not returned for LinkedIn).
                                            Read-only, never posts/schedules/deletes
   bfr stats  --sent [n]                   same columns for the n most recently sent posts (default 10,
-                                           max 50), newest first. Read-only
+                                           no max), newest first. Read-only
   bfr delete <post-id>                    PERMANENTLY deletes a post/draft -- irreversible, no undo
   bfr version                             print version, commit and build date
 

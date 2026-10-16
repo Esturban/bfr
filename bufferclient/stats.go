@@ -6,9 +6,8 @@ import (
 	"sort"
 )
 
-// MaxSentStats caps how many sent posts ListSent will return. Buffer's
-// posts connection is fetched in a single page of this size.
-const MaxSentStats = 50
+// sentPageSize is how many posts ListSent asks Buffer for per request.
+const sentPageSize = 50
 
 // Metric is one post-level analytics value Buffer reports for a sent post.
 // Type is the machine name (reactions, comments, impressions, reach,
@@ -71,41 +70,28 @@ func (c *Client) GetStats(postID string) (*PostStats, []byte, error) {
 }
 
 // ListSent returns up to n sent posts with their metrics, newest sentAt
-// first. Read-only query. n must be between 1 and MaxSentStats.
+// first. Read-only query. It follows the connection's cursor page by page
+// until n posts are collected or Buffer reports no further page. The raw
+// response returned is the last page's.
 func (c *Client) ListSent(orgID string, n int) ([]PostStats, []byte, error) {
-	if n < 1 || n > MaxSentStats {
-		return nil, nil, fmt.Errorf("count must be between 1 and %d, got %d", MaxSentStats, n)
+	if n < 1 {
+		return nil, nil, fmt.Errorf("count must be at least 1, got %d", n)
 	}
-	vars := map[string]interface{}{
-		"input": map[string]interface{}{
-			"organizationId": orgID,
-			"filter":         map[string]interface{}{"status": []string{"sent"}},
-			"sort":           []map[string]string{{"field": "createdAt", "direction": "desc"}},
-		},
-		"first": MaxSentStats,
-	}
-	resp, err := c.Raw(
-		`query($input: PostsInput!, $first: Int) { posts(input:$input, first:$first) { edges { node { `+statsFields+` } } } }`,
-		vars,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	var parsed struct {
-		Data struct {
-			Posts struct {
-				Edges []struct {
-					Node PostStats `json:"node"`
-				} `json:"edges"`
-			} `json:"posts"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(resp, &parsed); err != nil || parsed.Data.Posts.Edges == nil {
-		return nil, resp, fmt.Errorf("posts query failed")
-	}
-	items := make([]PostStats, 0, len(parsed.Data.Posts.Edges))
-	for _, e := range parsed.Data.Posts.Edges {
-		items = append(items, e.Node)
+	var items []PostStats
+	var resp []byte
+	after := ""
+	for len(items) < n {
+		page, raw, next, err := c.listSentPage(orgID, after)
+		resp = raw
+		if err != nil {
+			return nil, resp, err
+		}
+		items = append(items, page...)
+		// An empty or repeated cursor would loop forever; treat it as the end.
+		if next == "" || next == after {
+			break
+		}
+		after = next
 	}
 	// createdAt order is not send order (a draft made long ago can go out
 	// today), so the "last n sent" cut is made on sentAt.
@@ -114,4 +100,48 @@ func (c *Client) ListSent(orgID string, n int) ([]PostStats, []byte, error) {
 		items = items[:n]
 	}
 	return items, resp, nil
+}
+
+// listSentPage fetches one page after the given cursor. next is the cursor
+// for the following page, or "" when there is none.
+func (c *Client) listSentPage(orgID, after string) (items []PostStats, resp []byte, next string, err error) {
+	input := map[string]interface{}{
+		"organizationId": orgID,
+		"filter":         map[string]interface{}{"status": []string{"sent"}},
+		"sort":           []map[string]string{{"field": "createdAt", "direction": "desc"}},
+	}
+	vars := map[string]interface{}{"input": input, "first": sentPageSize}
+	if after != "" {
+		vars["after"] = after
+	}
+	resp, err = c.Raw(
+		`query($input: PostsInput!, $first: Int, $after: String) { posts(input:$input, first:$first, after:$after) { edges { node { `+statsFields+` } } pageInfo { hasNextPage endCursor } } }`,
+		vars,
+	)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	var parsed struct {
+		Data struct {
+			Posts struct {
+				Edges []struct {
+					Node PostStats `json:"node"`
+				} `json:"edges"`
+				PageInfo struct {
+					HasNextPage bool   `json:"hasNextPage"`
+					EndCursor   string `json:"endCursor"`
+				} `json:"pageInfo"`
+			} `json:"posts"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp, &parsed); err != nil || parsed.Data.Posts.Edges == nil {
+		return nil, resp, "", fmt.Errorf("posts query failed")
+	}
+	for _, e := range parsed.Data.Posts.Edges {
+		items = append(items, e.Node)
+	}
+	if parsed.Data.Posts.PageInfo.HasNextPage {
+		next = parsed.Data.Posts.PageInfo.EndCursor
+	}
+	return items, resp, next, nil
 }

@@ -51,7 +51,8 @@ func TestParseSentCount(t *testing.T) {
 		{[]string{"3"}, 3, false},
 		{[]string{"50"}, 50, false},
 		{[]string{"0"}, 0, true},
-		{[]string{"51"}, 0, true},
+		{[]string{"100"}, 100, false},
+		{[]string{"-1"}, 0, true},
 		{[]string{"abc"}, 0, true},
 	}
 	for _, tc := range cases {
@@ -59,5 +60,29 @@ func TestParseSentCount(t *testing.T) {
 		if (err != nil) != tc.wantErr || got != tc.want {
 			t.Errorf("parseSentCount(%v) = %d, %v; want %d, err=%v", tc.args, got, err, tc.want, tc.wantErr)
 		}
+	}
+}
+
+func TestIsHelpArg(t *testing.T) {
+	for _, a := range []string{"-h", "--help", "help"} {
+		if !isHelpArg(a) {
+			t.Errorf("isHelpArg(%q) = false, want true", a)
+		}
+	}
+	for _, a := range []string{"", "p1", "--sent", "--helpme"} {
+		if isHelpArg(a) {
+			t.Errorf("isHelpArg(%q) = true, want false", a)
+		}
+	}
+}
+
+func TestStatsHelpDescribesBothFormsAndUncappedSent(t *testing.T) {
+	for _, want := range []string{"bfr stats <post-id>", "bfr stats --sent [n]", "Read-only"} {
+		if !strings.Contains(statsHelp, want) {
+			t.Errorf("statsHelp missing %q", want)
+		}
+	}
+	if strings.Contains(statsHelp, "max 50") {
+		t.Error("statsHelp must not claim a 50 cap")
 	}
 }

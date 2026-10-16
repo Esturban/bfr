@@ -47,14 +47,37 @@ func parseSentCount(args []string) (int, error) {
 		return defaultSentCount, nil
 	}
 	n, err := strconv.Atoi(args[0])
-	if err != nil || n < 1 || n > bufferclient.MaxSentStats {
-		return 0, fmt.Errorf("--sent takes a number from 1 to %d, got %q", bufferclient.MaxSentStats, args[0])
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("--sent takes a number of 1 or more, got %q", args[0])
 	}
 	return n, nil
 }
 
+// statsHelp is what `bfr stats --help` prints.
+const statsHelp = `Usage: bfr stats <post-id>
+       bfr stats --sent [n]
+
+  bfr stats <post-id>   metrics for one SENT post: impressions, reach, reactions,
+                        comments, clicks, engagement rate. A metric Buffer does not
+                        return prints n/a (clicks is not returned for LinkedIn).
+  bfr stats --sent [n]  same columns for the n most recently sent posts (default 10,
+                        no cap; pages through Buffer 50 at a time), newest first.
+
+Read-only: never posts, schedules, updates or deletes.
+`
+
+// isHelpArg reports whether a stats argument asks for help rather than
+// naming a post.
+func isHelpArg(a string) bool {
+	return a == "-h" || a == "--help" || a == "help"
+}
+
 // cmdStats prints post-level metrics for one post. Read-only.
 func cmdStats(postID string) {
+	if isHelpArg(postID) {
+		fmt.Print(statsHelp)
+		return
+	}
 	if strings.TrimSpace(postID) == "" {
 		blocked("post id is required")
 	}
@@ -75,6 +98,10 @@ func cmdStats(postID string) {
 
 // cmdStatsSent prints metrics for the n most recently sent posts. Read-only.
 func cmdStatsSent(args []string) {
+	if len(args) > 0 && isHelpArg(args[0]) {
+		fmt.Print(statsHelp)
+		return
+	}
 	n, err := parseSentCount(args)
 	if err != nil {
 		blocked("%s", err)

@@ -2,9 +2,11 @@ package bufferclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -93,7 +95,84 @@ func TestListSentRejectsBadCount(t *testing.T) {
 	if _, _, err := c.ListSent("org1", 0); err == nil {
 		t.Fatal("n=0 must be rejected")
 	}
-	if _, _, err := c.ListSent("org1", MaxSentStats+1); err == nil {
-		t.Fatal("n above the cap must be rejected")
+}
+
+// newPagedServer serves total sent posts in pages, honouring the "after"
+// cursor and "first" page size, and records every request body.
+func newPagedServer(t *testing.T, total int) (*Client, *[]string) {
+	t.Helper()
+	var reqs []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		reqs = append(reqs, string(b))
+		var req struct {
+			Variables struct {
+				First int    `json:"first"`
+				After string `json:"after"`
+			} `json:"variables"`
+		}
+		_ = json.Unmarshal(b, &req)
+		start := 0
+		if req.Variables.After != "" {
+			start, _ = strconv.Atoi(strings.TrimPrefix(req.Variables.After, "c"))
+		}
+		end := start + req.Variables.First
+		if end > total {
+			end = total
+		}
+		var edges []string
+		for i := start; i < end; i++ {
+			edges = append(edges, fmt.Sprintf(`{"node":{"id":"p%03d","status":"sent","sentAt":"2026-01-01T00:%02d:%02dZ","metrics":[]}}`, i, i/60, i%60))
+		}
+		_, _ = fmt.Fprintf(w, `{"data":{"posts":{"edges":[%s],"pageInfo":{"hasNextPage":%t,"endCursor":"c%d"}}}}`,
+			strings.Join(edges, ","), end < total, end)
+	}))
+	t.Cleanup(srv.Close)
+	return New("test-token", srv.URL), &reqs
+}
+
+func TestListSentPagesPastOnePage(t *testing.T) {
+	c, reqs := newPagedServer(t, 61)
+	items, _, err := c.ListSent("org1", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 61 {
+		t.Fatalf("want all 61 posts, got %d", len(items))
+	}
+	if len(*reqs) != 2 {
+		t.Fatalf("want 2 page requests, got %d", len(*reqs))
+	}
+	seen := map[string]bool{}
+	for _, it := range items {
+		if seen[it.ID] {
+			t.Fatalf("duplicate post %s across pages", it.ID)
+		}
+		seen[it.ID] = true
+	}
+	for _, r := range *reqs {
+		if strings.Contains(r, "mutation") {
+			t.Fatalf("paging must stay read-only, sent: %s", r)
+		}
+	}
+}
+
+func TestListSentStopsPagingOnceEnough(t *testing.T) {
+	c, reqs := newPagedServer(t, 500)
+	items, _, err := c.ListSent("org1", 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 60 || len(*reqs) != 2 {
+		t.Fatalf("want 60 items in 2 requests, got %d in %d", len(items), len(*reqs))
+	}
+}
+
+func TestListSentStopsWhenCursorDoesNotAdvance(t *testing.T) {
+	body := `{"data":{"posts":{"edges":[{"node":{"id":"a","sentAt":"2026-01-01T00:00:00Z"}}],"pageInfo":{"hasNextPage":true,"endCursor":""}}}}`
+	c, _ := newStatsServer(t, body)
+	items, _, err := c.ListSent("org1", 100)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("want 1 item and no infinite loop, got %d, %v", len(items), err)
 	}
 }
